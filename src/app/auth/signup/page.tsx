@@ -1,0 +1,66 @@
+"use client";
+
+import { useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { SignupForm } from "@/components/auth/SignupForm";
+import Link from "next/link";
+
+export default function SignupPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/";
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.push(callbackUrl);
+    }
+  }, [status, router, callbackUrl]);
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "authenticated") {
+    return null; // Will redirect via useEffect
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Daily Lunch Ordering
+          </h1>
+          <p className="text-gray-600">Create your account</p>
+        </div>
+
+        <SignupForm redirectTo={callbackUrl} />
+
+        <div className="text-center">
+          <p className="text-sm text-gray-600">
+            Already have an account?{" "}
+            <Link
+              href={`/auth/login${
+                callbackUrl !== "/"
+                  ? `?callbackUrl=${encodeURIComponent(callbackUrl)}`
+                  : ""
+              }`}
+              className="font-medium text-blue-600 hover:text-blue-500"
+            >
+              Sign in here
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

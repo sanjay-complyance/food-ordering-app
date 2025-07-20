@@ -1,0 +1,7 @@
+<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+    <rect width="144" height="144" fill="#2563eb" rx="18"/>
+    <g fill="white" transform="translate(72, 72)">
+      <path d="M-14.4,-21.599999999999998 L-14.4,21.599999999999998 M-17.28,-21.599999999999998 L-17.28,-7.2 M-11.52,-21.599999999999998 L-11.52,-7.2" stroke="white" stroke-width="1.44" fill="none"/>
+      <path d="M14.4,-21.599999999999998 L14.4,21.599999999999998 M11.52,-21.599999999999998 L17.28,-11.52" stroke="white" stroke-width="1.44" fill="none"/>
+    </g>
+  </svg>
