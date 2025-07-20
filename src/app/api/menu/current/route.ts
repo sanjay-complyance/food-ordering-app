@@ -4,6 +4,9 @@ import { authOptions } from "@/lib/auth";
 import connectToDatabase from "@/lib/mongodb";
 import { MenuItem } from "@/models/MenuItem";
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     console.log("Current Menu API: Starting request");

@@ -4,6 +4,9 @@ import dbConnect from "@/lib/mongodb";
 import Order from "@/models/Order";
 import User from "@/models/User";
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 // GET /api/admin/orders - Get all orders for a specific date (admin only)
 export async function GET(request: NextRequest) {
   try {

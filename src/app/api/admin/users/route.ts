@@ -3,6 +3,9 @@ import { auth } from "@/lib/auth";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 // GET /api/admin/users - Get all users (superuser only)
 export async function GET(request: NextRequest) {
   try {
