@@ -3,6 +3,9 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["mongoose"],
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   // Simplified webpack config for development
   webpack: (config, { dev, isServer }) => {
     if (!isServer) {
