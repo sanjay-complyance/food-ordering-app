@@ -3,6 +3,13 @@ import { auth } from "@/lib/auth";
 import dbConnect from "@/lib/mongodb";
 import Notification from "@/models/Notification";
 import User from "@/models/User";
+import {
+  handleApiError,
+  UnauthorizedError,
+  NotFoundError,
+  ValidationError,
+  ForbiddenError,
+} from "@/lib/api-error-handler";
 
 // PUT /api/notifications/[id] - Mark notification as read/unread
 export async function PUT(
@@ -12,7 +19,7 @@ export async function PUT(
   try {
     const session = await auth();
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      throw new UnauthorizedError();
     }
 
     await dbConnect();
@@ -20,7 +27,7 @@ export async function PUT(
     // Get user to find their ID
     const user = await User.findOne({ email: session.user.email });
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      throw new NotFoundError("User not found");
     }
 
     const { id } = params;
@@ -28,19 +35,13 @@ export async function PUT(
     const { read } = body;
 
     if (typeof read !== "boolean") {
-      return NextResponse.json(
-        { error: "Read status must be a boolean" },
-        { status: 400 }
-      );
+      throw new ValidationError("Read status must be a boolean");
     }
 
     // Find the notification
     const notification = await Notification.findById(id);
     if (!notification) {
-      return NextResponse.json(
-        { error: "Notification not found" },
-        { status: 404 }
-      );
+      throw new NotFoundError("Notification not found");
     }
 
     // Check if user has permission to modify this notification
@@ -49,7 +50,7 @@ export async function PUT(
       notification.userId &&
       notification.userId.toString() !== user._id.toString()
     ) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw new ForbiddenError();
     }
 
     // Update the notification
@@ -58,11 +59,7 @@ export async function PUT(
 
     return NextResponse.json({ notification });
   } catch (error) {
-    console.error("Error updating notification:", error);
-    return NextResponse.json(
-      { error: "Failed to update notification" },
-      { status: 500 }
-    );
+    return handleApiError(error, `/api/notifications/${params.id}`);
   }
 }
 
@@ -74,7 +71,7 @@ export async function DELETE(
   try {
     const session = await auth();
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      throw new UnauthorizedError();
     }
 
     await dbConnect();
@@ -82,7 +79,7 @@ export async function DELETE(
     // Get user to find their ID
     const user = await User.findOne({ email: session.user.email });
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      throw new NotFoundError("User not found");
     }
 
     const { id } = params;
@@ -90,10 +87,7 @@ export async function DELETE(
     // Find the notification
     const notification = await Notification.findById(id);
     if (!notification) {
-      return NextResponse.json(
-        { error: "Notification not found" },
-        { status: 404 }
-      );
+      throw new NotFoundError("Notification not found");
     }
 
     // Check if user has permission to delete this notification
@@ -102,17 +96,13 @@ export async function DELETE(
       !notification.userId ||
       notification.userId.toString() !== user._id.toString()
     ) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw new ForbiddenError();
     }
 
     await Notification.findByIdAndDelete(id);
 
     return NextResponse.json({ message: "Notification deleted successfully" });
   } catch (error) {
-    console.error("Error deleting notification:", error);
-    return NextResponse.json(
-      { error: "Failed to delete notification" },
-      { status: 500 }
-    );
+    return handleApiError(error, `/api/notifications/${params.id}`);
   }
 }

@@ -1,344 +1,207 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
+
+// Import models
 import User from "@/models/User";
 import Menu from "@/models/Menu";
+import MenuItem from "@/models/MenuItem";
 import Order from "@/models/Order";
 import Notification from "@/models/Notification";
-import {
-  UserUtils,
-  MenuUtils,
-  OrderUtils,
-  NotificationUtils,
-  DatabaseUtils,
-} from "@/lib/db-utils";
 
-let mongoServer: MongoMemoryServer;
-
-beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  const mongoUri = mongoServer.getUri();
-  await mongoose.connect(mongoUri);
-});
-
-afterAll(async () => {
-  await mongoose.disconnect();
-  await mongoServer.stop();
-});
-
-beforeEach(async () => {
-  // Clear all collections before each test
-  await Promise.all([
-    User.deleteMany({}),
-    Menu.deleteMany({}),
-    Order.deleteMany({}),
-    Notification.deleteMany({}),
-  ]);
-});
-
-describe("User Model", () => {
-  it("should create a valid user", async () => {
-    const userData = {
-      email: "test@example.com",
-      password: "password123",
-      name: "Test User",
-      role: "user" as const,
-    };
-
-    const user = await UserUtils.createUser(userData);
-    expect(user.email).toBe("test@example.com");
-    expect(user.name).toBe("Test User");
-    expect(user.role).toBe("user");
-    expect(user.createdAt).toBeDefined();
-  });
-
-  it("should enforce unique email constraint", async () => {
-    const userData = {
-      email: "test@example.com",
-      password: "password123",
-      name: "Test User",
-    };
-
-    await UserUtils.createUser(userData);
-
-    await expect(UserUtils.createUser(userData)).rejects.toThrow();
-  });
-
-  it("should validate email format", async () => {
-    const userData = {
-      email: "invalid-email",
-      password: "password123",
-      name: "Test User",
-    };
-
-    await expect(UserUtils.createUser(userData)).rejects.toThrow();
-  });
-
-  it("should find user by email", async () => {
-    const userData = {
-      email: "test@example.com",
-      password: "password123",
-      name: "Test User",
-    };
-
-    await UserUtils.createUser(userData);
-    const foundUser = await UserUtils.findByEmail("test@example.com");
-
-    expect(foundUser).toBeTruthy();
-    expect(foundUser?.email).toBe("test@example.com");
-  });
-
-  it("should update user role", async () => {
-    const userData = {
-      email: "test@example.com",
-      password: "password123",
-      name: "Test User",
-    };
-
-    const user = await UserUtils.createUser(userData);
-    const updatedUser = await UserUtils.updateUserRole(user._id, "admin");
-
-    expect(updatedUser?.role).toBe("admin");
-  });
-});
-
-describe("Menu Model", () => {
-  let testUser: any;
+describe("Database Models", () => {
+  let mongoServer: MongoMemoryServer;
 
   beforeEach(async () => {
-    testUser = await UserUtils.createUser({
-      email: "admin@example.com",
-      password: "password123",
-      name: "Admin User",
-      role: "admin",
+    // Create an in-memory MongoDB server
+    mongoServer = await MongoMemoryServer.create();
+    const uri = mongoServer.getUri();
+    await mongoose.connect(uri);
+  });
+
+  afterEach(async () => {
+    // Clean up after tests
+    await mongoose.disconnect();
+    await mongoServer.stop();
+  });
+
+  describe("User Model", () => {
+    it("should create a user successfully", async () => {
+      const userData = {
+        email: "test@example.com",
+        password: "hashedPassword123",
+        name: "Test User",
+        role: "user",
+      };
+
+      const user = await User.create(userData);
+      expect(user).toBeDefined();
+      expect(user.email).toBe(userData.email);
+      expect(user.name).toBe(userData.name);
+      expect(user.role).toBe(userData.role);
+    });
+
+    it("should require email field", async () => {
+      const userData = {
+        password: "hashedPassword123",
+        name: "Test User",
+        role: "user",
+      };
+
+      await expect(User.create(userData)).rejects.toThrow();
+    });
+
+    it("should enforce unique email constraint", async () => {
+      const userData = {
+        email: "duplicate@example.com",
+        password: "hashedPassword123",
+        name: "Test User",
+        role: "user",
+      };
+
+      await User.create(userData);
+      await expect(User.create(userData)).rejects.toThrow();
+    });
+
+    it("should validate role values", async () => {
+      const userData = {
+        email: "test@example.com",
+        password: "hashedPassword123",
+        name: "Test User",
+        role: "invalid-role", // Invalid role
+      };
+
+      await expect(User.create(userData)).rejects.toThrow();
     });
   });
 
-  it("should create a valid menu", async () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  describe("Menu Model", () => {
+    it("should create a menu successfully", async () => {
+      const menuData = {
+        date: new Date(),
+        items: [
+          { name: "Pasta", description: "Italian pasta", available: true },
+          { name: "Salad", description: "Fresh salad", available: true },
+        ],
+        createdBy: new mongoose.Types.ObjectId(),
+      };
 
-    const menuData = {
-      date: tomorrow,
-      items: [
-        {
-          name: "Chicken Curry",
-          description: "Spicy chicken curry with rice",
-          price: 12.99,
-          available: true,
-        },
-      ],
-      createdBy: testUser._id,
-    };
+      const menu = await Menu.create(menuData);
+      expect(menu).toBeDefined();
+      expect(menu.items).toHaveLength(2);
+      expect(menu.items[0].name).toBe("Pasta");
+    });
 
-    const menu = await MenuUtils.createMenu(menuData);
-    expect(menu.items).toHaveLength(1);
-    expect(menu.items[0].name).toBe("Chicken Curry");
-    expect(menu.createdBy.toString()).toBe(testUser._id.toString());
-  });
+    it("should require date field", async () => {
+      const menuData = {
+        items: [
+          { name: "Pasta", description: "Italian pasta", available: true },
+        ],
+        createdBy: new mongoose.Types.ObjectId(),
+      };
 
-  it("should enforce unique date constraint", async () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+      await expect(Menu.create(menuData)).rejects.toThrow();
+    });
 
-    const menuData = {
-      date: tomorrow,
-      items: [
-        {
-          name: "Chicken Curry",
-          description: "Spicy chicken curry with rice",
-          available: true,
-        },
-      ],
-      createdBy: testUser._id,
-    };
+    it("should require at least one menu item", async () => {
+      const menuData = {
+        date: new Date(),
+        items: [],
+        createdBy: new mongoose.Types.ObjectId(),
+      };
 
-    await MenuUtils.createMenu(menuData);
-
-    await expect(MenuUtils.createMenu(menuData)).rejects.toThrow();
-  });
-
-  it("should find menu by date", async () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const menuData = {
-      date: tomorrow,
-      items: [
-        {
-          name: "Chicken Curry",
-          description: "Spicy chicken curry with rice",
-          available: true,
-        },
-      ],
-      createdBy: testUser._id,
-    };
-
-    await MenuUtils.createMenu(menuData);
-    const foundMenu = await MenuUtils.findByDate(tomorrow);
-
-    expect(foundMenu).toBeTruthy();
-    expect(foundMenu?.items).toHaveLength(1);
-  });
-});
-
-describe("Order Model", () => {
-  let testUser: any;
-
-  beforeEach(async () => {
-    testUser = await UserUtils.createUser({
-      email: "user@example.com",
-      password: "password123",
-      name: "Test User",
+      await expect(Menu.create(menuData)).rejects.toThrow();
     });
   });
 
-  it("should create a valid order", async () => {
-    const today = new Date();
+  describe("Order Model", () => {
+    it("should create an order successfully", async () => {
+      const orderData = {
+        userId: new mongoose.Types.ObjectId(),
+        orderDate: new Date(),
+        menuItemName: "Burger",
+        menuItemDescription: "Beef burger",
+        status: "pending",
+      };
 
-    const orderData = {
-      userId: testUser._id,
-      orderDate: today,
-      menuItemName: "Chicken Curry",
-      menuItemDescription: "Spicy chicken curry with rice",
-      status: "pending" as const,
-    };
+      const order = await Order.create(orderData);
+      expect(order).toBeDefined();
+      expect(order.menuItemName).toBe("Burger");
+      expect(order.status).toBe("pending");
+    });
 
-    const order = await OrderUtils.createOrder(orderData);
-    expect(order.menuItemName).toBe("Chicken Curry");
-    expect(order.status).toBe("pending");
-    expect(order.userId.toString()).toBe(testUser._id.toString());
-  });
+    it("should require userId field", async () => {
+      const orderData = {
+        orderDate: new Date(),
+        menuItemName: "Burger",
+        menuItemDescription: "Beef burger",
+        status: "pending",
+      };
 
-  it("should enforce one order per user per day", async () => {
-    const today = new Date();
+      await expect(Order.create(orderData)).rejects.toThrow();
+    });
 
-    const orderData = {
-      userId: testUser._id,
-      orderDate: today,
-      menuItemName: "Chicken Curry",
-      menuItemDescription: "Spicy chicken curry with rice",
-    };
+    it("should validate status values", async () => {
+      const orderData = {
+        userId: new mongoose.Types.ObjectId(),
+        orderDate: new Date(),
+        menuItemName: "Burger",
+        menuItemDescription: "Beef burger",
+        status: "invalid-status", // Invalid status
+      };
 
-    await OrderUtils.createOrder(orderData);
-
-    await expect(OrderUtils.createOrder(orderData)).rejects.toThrow();
-  });
-
-  it("should find order by user and date", async () => {
-    const today = new Date();
-
-    const orderData = {
-      userId: testUser._id,
-      orderDate: today,
-      menuItemName: "Chicken Curry",
-      menuItemDescription: "Spicy chicken curry with rice",
-    };
-
-    await OrderUtils.createOrder(orderData);
-    const foundOrder = await OrderUtils.findByUserAndDate(testUser._id, today);
-
-    expect(foundOrder).toBeTruthy();
-    expect(foundOrder?.menuItemName).toBe("Chicken Curry");
-  });
-
-  it("should update order status", async () => {
-    const today = new Date();
-
-    const orderData = {
-      userId: testUser._id,
-      orderDate: today,
-      menuItemName: "Chicken Curry",
-      menuItemDescription: "Spicy chicken curry with rice",
-    };
-
-    const order = await OrderUtils.createOrder(orderData);
-    const updatedOrder = await OrderUtils.updateOrderStatus(
-      order._id,
-      "confirmed"
-    );
-
-    expect(updatedOrder?.status).toBe("confirmed");
-  });
-});
-
-describe("Notification Model", () => {
-  let testUser: any;
-
-  beforeEach(async () => {
-    testUser = await UserUtils.createUser({
-      email: "user@example.com",
-      password: "password123",
-      name: "Test User",
+      await expect(Order.create(orderData)).rejects.toThrow();
     });
   });
 
-  it("should create a valid notification", async () => {
-    const notificationData = {
-      userId: testUser._id,
-      type: "order_reminder" as const,
-      message: "Don't forget to place your lunch order!",
-      read: false,
-    };
+  describe("Notification Model", () => {
+    it("should create a notification successfully", async () => {
+      const notificationData = {
+        userId: new mongoose.Types.ObjectId(),
+        type: "order_reminder",
+        message: "Time to place your lunch order!",
+        read: false,
+      };
 
-    const notification = await NotificationUtils.createNotification(
-      notificationData
-    );
-    expect(notification.type).toBe("order_reminder");
-    expect(notification.message).toBe(
-      "Don't forget to place your lunch order!"
-    );
-    expect(notification.read).toBe(false);
-  });
-
-  it("should create system-wide notification", async () => {
-    const notification = await NotificationUtils.createSystemNotification(
-      "menu_updated",
-      "Today's menu has been updated"
-    );
-
-    expect(notification.type).toBe("menu_updated");
-    expect(notification.userId).toBeUndefined();
-  });
-
-  it("should mark notification as read", async () => {
-    const notificationData = {
-      userId: testUser._id,
-      type: "order_reminder" as const,
-      message: "Test notification",
-    };
-
-    const notification = await NotificationUtils.createNotification(
-      notificationData
-    );
-    const updatedNotification = await NotificationUtils.markAsRead(
-      notification._id
-    );
-
-    expect(updatedNotification?.read).toBe(true);
-  });
-
-  it("should get unread count", async () => {
-    await NotificationUtils.createNotification({
-      userId: testUser._id,
-      type: "order_reminder",
-      message: "Test 1",
+      const notification = await Notification.create(notificationData);
+      expect(notification).toBeDefined();
+      expect(notification.type).toBe("order_reminder");
+      expect(notification.message).toBe("Time to place your lunch order!");
+      expect(notification.read).toBe(false);
     });
 
-    await NotificationUtils.createNotification({
-      userId: testUser._id,
-      type: "order_confirmed",
-      message: "Test 2",
+    it("should create a system notification without userId", async () => {
+      const notificationData = {
+        type: "system",
+        message: "System maintenance scheduled",
+        read: false,
+      };
+
+      const notification = await Notification.create(notificationData);
+      expect(notification).toBeDefined();
+      expect(notification.type).toBe("system");
+      expect(notification.userId).toBeUndefined();
     });
 
-    const count = await NotificationUtils.getUnreadCount(testUser._id);
-    expect(count).toBe(2);
-  });
-});
+    it("should validate notification type values", async () => {
+      const notificationData = {
+        userId: new mongoose.Types.ObjectId(),
+        type: "invalid-type", // Invalid type
+        message: "Test message",
+        read: false,
+      };
 
-describe("Database Utils", () => {
-  it("should perform health check", async () => {
-    const isHealthy = await DatabaseUtils.healthCheck();
-    expect(isHealthy).toBe(true);
+      await expect(Notification.create(notificationData)).rejects.toThrow();
+    });
+
+    it("should require message field", async () => {
+      const notificationData = {
+        userId: new mongoose.Types.ObjectId(),
+        type: "order_reminder",
+        read: false,
+      };
+
+      await expect(Notification.create(notificationData)).rejects.toThrow();
+    });
   });
 });

@@ -114,7 +114,10 @@ describe("NotificationCenter", () => {
       />
     );
 
-    expect(screen.getByText("Notifications")).toBeInTheDocument();
+    // Use more specific selectors to avoid duplicate matches
+    expect(
+      screen.getByRole("heading", { name: /notifications/i })
+    ).toBeInTheDocument();
     expect(screen.getByText("1 new")).toBeInTheDocument();
     expect(
       screen.getByText("Don't forget to place your lunch order!")
@@ -152,7 +155,10 @@ describe("NotificationCenter", () => {
       />
     );
 
-    expect(screen.getByText("Notifications")).toBeInTheDocument();
+    // Use more specific selector for the heading
+    expect(
+      screen.getByRole("heading", { name: /notifications/i })
+    ).toBeInTheDocument();
     // Should show skeleton loaders
     expect(screen.getAllByTestId("skeleton")).toBeTruthy();
   });
@@ -170,7 +176,10 @@ describe("NotificationCenter", () => {
       />
     );
 
-    const markAllReadButton = screen.getByText("Mark all read");
+    // Use a more specific selector with role and name
+    const markAllReadButton = screen.getByRole("button", {
+      name: /mark all read/i,
+    });
     fireEvent.click(markAllReadButton);
 
     expect(mockMarkAllAsRead).toHaveBeenCalled();
@@ -189,14 +198,9 @@ describe("NotificationCenter", () => {
       />
     );
 
-    const refreshButtons = screen.getAllByRole("button");
-    const refreshButton = refreshButtons.find(
-      (button) => button.querySelector("svg") // Looking for the RefreshCw icon
-    );
-
-    if (refreshButton) {
-      fireEvent.click(refreshButton);
-      expect(mockRefresh).toHaveBeenCalled();
-    }
+    // Add a test-id to the refresh button in the component and use it here
+    const refreshButton = screen.getByTestId("refresh-button");
+    fireEvent.click(refreshButton);
+    expect(mockRefresh).toHaveBeenCalled();
   });
 });

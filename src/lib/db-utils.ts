@@ -1,263 +1,106 @@
-import { ObjectId } from "mongoose";
+import mongoose from "mongoose";
 import User from "@/models/User";
 import Menu from "@/models/Menu";
 import Order from "@/models/Order";
 import Notification from "@/models/Notification";
-import {
-  IUser,
-  IMenu,
-  IOrder,
-  INotification,
-  UserRole,
-  OrderStatus,
-  NotificationType,
-} from "@/types/models";
-import dbConnect from "./mongodb";
 
-// User utilities
-export class UserUtils {
-  static async findByEmail(email: string): Promise<IUser | null> {
-    await dbConnect();
-    return User.findOne({ email: email.toLowerCase() }).exec();
-  }
+/**
+ * Creates optimal indexes for MongoDB collections to improve query performance
+ */
+export async function createIndexes() {
+  try {
+    // User indexes
+    await User.collection.createIndex({ email: 1 }, { unique: true });
+    await User.collection.createIndex({ role: 1 });
 
-  static async findById(id: string | ObjectId): Promise<IUser | null> {
-    await dbConnect();
-    return User.findById(id).exec();
-  }
+    // Menu indexes
+    await Menu.collection.createIndex({ date: -1 });
+    await Menu.collection.createIndex({ "items.available": 1 });
+    await Menu.collection.createIndex({ createdBy: 1 });
 
-  static async createUser(userData: Partial<IUser>): Promise<IUser> {
-    await dbConnect();
-    const user = new User(userData);
-    return user.save();
-  }
+    // Order indexes
+    await Order.collection.createIndex({ userId: 1 });
+    await Order.collection.createIndex({ orderDate: -1 });
+    await Order.collection.createIndex({ status: 1 });
+    await Order.collection.createIndex({ userId: 1, orderDate: -1 });
 
-  static async updateUserRole(
-    id: string | ObjectId,
-    role: UserRole
-  ): Promise<IUser | null> {
-    await dbConnect();
-    return User.findByIdAndUpdate(id, { role }, { new: true }).exec();
-  }
+    // Notification indexes
+    await Notification.collection.createIndex({ userId: 1 });
+    await Notification.collection.createIndex({ read: 1 });
+    await Notification.collection.createIndex({ createdAt: -1 });
+    await Notification.collection.createIndex({ userId: 1, read: 1 });
+    await Notification.collection.createIndex({ type: 1 });
 
-  static async getAllUsers(): Promise<IUser[]> {
-    await dbConnect();
-    return User.find({}).sort({ createdAt: -1 }).exec();
+    console.log("Database indexes created successfully");
+  } catch (error) {
+    console.error("Error creating database indexes:", error);
   }
 }
 
-// Menu utilities
-export class MenuUtils {
-  static async findByDate(date: Date): Promise<IMenu | null> {
-    await dbConnect();
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+/**
+ * Utility function to convert MongoDB document to plain object
+ * and handle ObjectId conversion to string
+ */
+export function sanitizeDocument(doc: any) {
+  if (!doc) return null;
 
-    return Menu.findOne({
-      date: { $gte: startOfDay, $lte: endOfDay },
-    })
-      .populate("createdBy", "name email")
-      .exec();
+  const obj = doc.toObject ? doc.toObject() : doc;
+
+  // Convert _id to string if it exists
+  if (obj._id) {
+    obj._id = obj._id.toString();
   }
 
-  static async createMenu(menuData: Partial<IMenu>): Promise<IMenu> {
-    await dbConnect();
-    const menu = new Menu(menuData);
-    return menu.save();
-  }
-
-  static async updateMenu(
-    id: string | ObjectId,
-    menuData: Partial<IMenu>
-  ): Promise<IMenu | null> {
-    await dbConnect();
-    return Menu.findByIdAndUpdate(id, menuData, { new: true })
-      .populate("createdBy", "name email")
-      .exec();
-  }
-
-  static async deleteMenu(id: string | ObjectId): Promise<IMenu | null> {
-    await dbConnect();
-    return Menu.findByIdAndDelete(id).exec();
-  }
-
-  static async getRecentMenus(limit: number = 10): Promise<IMenu[]> {
-    await dbConnect();
-    return Menu.find({})
-      .sort({ date: -1 })
-      .limit(limit)
-      .populate("createdBy", "name email")
-      .exec();
-  }
-}
-
-// Order utilities
-export class OrderUtils {
-  static async findByUserAndDate(
-    userId: string | ObjectId,
-    date: Date
-  ): Promise<IOrder | null> {
-    await dbConnect();
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    return Order.findOne({
-      userId,
-      orderDate: { $gte: startOfDay, $lte: endOfDay },
-    })
-      .populate("userId", "name email")
-      .exec();
-  }
-
-  static async findByDate(date: Date): Promise<IOrder[]> {
-    await dbConnect();
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    return Order.find({
-      orderDate: { $gte: startOfDay, $lte: endOfDay },
-    })
-      .populate("userId", "name email")
-      .sort({ createdAt: -1 })
-      .exec();
-  }
-
-  static async createOrder(orderData: Partial<IOrder>): Promise<IOrder> {
-    await dbConnect();
-    const order = new Order(orderData);
-    return order.save();
-  }
-
-  static async updateOrder(
-    id: string | ObjectId,
-    orderData: Partial<IOrder>
-  ): Promise<IOrder | null> {
-    await dbConnect();
-    return Order.findByIdAndUpdate(id, orderData, { new: true })
-      .populate("userId", "name email")
-      .exec();
-  }
-
-  static async deleteOrder(id: string | ObjectId): Promise<IOrder | null> {
-    await dbConnect();
-    return Order.findByIdAndDelete(id).exec();
-  }
-
-  static async updateOrderStatus(
-    id: string | ObjectId,
-    status: OrderStatus
-  ): Promise<IOrder | null> {
-    await dbConnect();
-    return Order.findByIdAndUpdate(id, { status }, { new: true })
-      .populate("userId", "name email")
-      .exec();
-  }
-
-  static async getOrdersByUser(
-    userId: string | ObjectId,
-    limit: number = 10
-  ): Promise<IOrder[]> {
-    await dbConnect();
-    return Order.find({ userId }).sort({ createdAt: -1 }).limit(limit).exec();
-  }
-}
-
-// Notification utilities
-export class NotificationUtils {
-  static async findByUser(
-    userId: string | ObjectId,
-    unreadOnly: boolean = false
-  ): Promise<INotification[]> {
-    await dbConnect();
-    const query: any = { userId };
-    if (unreadOnly) {
-      query.read = false;
+  // Convert any other ObjectId fields to strings
+  Object.keys(obj).forEach((key) => {
+    if (obj[key] instanceof mongoose.Types.ObjectId) {
+      obj[key] = obj[key].toString();
     }
-    return Notification.find(query).sort({ createdAt: -1 }).exec();
-  }
+  });
 
-  static async createNotification(
-    notificationData: Partial<INotification>
-  ): Promise<INotification> {
-    await dbConnect();
-    const notification = new Notification(notificationData);
-    return notification.save();
-  }
-
-  static async markAsRead(
-    id: string | ObjectId
-  ): Promise<INotification | null> {
-    await dbConnect();
-    return Notification.findByIdAndUpdate(
-      id,
-      { read: true },
-      { new: true }
-    ).exec();
-  }
-
-  static async markAllAsRead(userId: string | ObjectId): Promise<void> {
-    await dbConnect();
-    await Notification.updateMany(
-      { userId, read: false },
-      { read: true }
-    ).exec();
-  }
-
-  static async createSystemNotification(
-    type: NotificationType,
-    message: string
-  ): Promise<INotification> {
-    await dbConnect();
-    const notification = new Notification({
-      type,
-      message,
-      userId: undefined, // System-wide notification
-    });
-    return notification.save();
-  }
-
-  static async getUnreadCount(userId: string | ObjectId): Promise<number> {
-    await dbConnect();
-    return Notification.countDocuments({ userId, read: false }).exec();
-  }
-
-  static async deleteOldNotifications(daysOld: number = 30): Promise<void> {
-    await dbConnect();
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
-    await Notification.deleteMany({ createdAt: { $lt: cutoffDate } }).exec();
-  }
+  return obj;
 }
 
-// General database utilities
-export class DatabaseUtils {
-  static async healthCheck(): Promise<boolean> {
-    try {
-      await dbConnect();
-      return true;
-    } catch (error) {
-      console.error("Database health check failed:", error);
-      return false;
-    }
+/**
+ * Utility function to sanitize an array of documents
+ */
+export function sanitizeDocuments(docs: any[]) {
+  if (!docs) return [];
+  return docs.map((doc) => sanitizeDocument(doc));
+}
+
+/**
+ * Utility function to handle database errors
+ */
+export function handleDbError(error: any) {
+  console.error("Database error:", error);
+
+  // Check for specific MongoDB error types
+  if (error.code === 11000) {
+    // Duplicate key error
+    return {
+      status: 409,
+      message: "Duplicate entry found",
+    };
   }
 
-  static async clearTestData(): Promise<void> {
-    if (process.env.NODE_ENV !== "test") {
-      throw new Error("clearTestData can only be called in test environment");
-    }
-
-    await dbConnect();
-    await Promise.all([
-      User.deleteMany({}),
-      Menu.deleteMany({}),
-      Order.deleteMany({}),
-      Notification.deleteMany({}),
-    ]);
+  if (error.name === "ValidationError") {
+    return {
+      status: 400,
+      message: "Validation error: " + error.message,
+    };
   }
+
+  // Default error
+  return {
+    status: 500,
+    message: "Database error occurred",
+  };
+}
+
+/**
+ * Utility function to check if MongoDB is connected
+ */
+export function isDbConnected() {
+  return mongoose.connection.readyState === 1;
 }

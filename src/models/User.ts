@@ -1,5 +1,10 @@
 import mongoose, { Schema, Model } from "mongoose";
-import { IUser, UserRole } from "@/types/models";
+import {
+  IUser,
+  UserRole,
+  NotificationDeliveryMethod,
+  NotificationFrequency,
+} from "@/types/models";
 
 const UserSchema = new Schema<IUser>(
   {
@@ -28,6 +33,34 @@ const UserSchema = new Schema<IUser>(
       type: String,
       enum: ["user", "admin", "superuser"] as UserRole[],
       default: "user",
+    },
+    notificationPreferences: {
+      orderReminders: {
+        type: Boolean,
+        default: true,
+      },
+      orderConfirmations: {
+        type: Boolean,
+        default: true,
+      },
+      orderModifications: {
+        type: Boolean,
+        default: true,
+      },
+      menuUpdates: {
+        type: Boolean,
+        default: true,
+      },
+      deliveryMethod: {
+        type: String,
+        enum: ["in_app", "email", "both"] as NotificationDeliveryMethod[],
+        default: "in_app",
+      },
+      frequency: {
+        type: String,
+        enum: ["all", "important_only", "none"] as NotificationFrequency[],
+        default: "all",
+      },
     },
   },
   {

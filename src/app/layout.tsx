@@ -5,6 +5,12 @@ import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import { ToastProvider } from "@/lib/toast";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ServiceWorkerRegistration } from "@/components/pwa/ServiceWorkerRegistration";
+import { initDbOptimizations } from "@/lib/db-optimization";
+
+// Initialize database optimizations in production
+if (process.env.NODE_ENV === "production") {
+  initDbOptimizations().catch(console.error);
+}
 
 const inter = Inter({ subsets: ["latin"] });
 

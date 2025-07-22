@@ -13,6 +13,22 @@ export type NotificationType =
   | "order_modified"
   | "menu_updated";
 
+// Notification delivery method enum
+export type NotificationDeliveryMethod = "in_app" | "email" | "both";
+
+// Notification frequency enum
+export type NotificationFrequency = "all" | "important_only" | "none";
+
+// Notification preferences interface
+export interface INotificationPreferences {
+  orderReminders: boolean;
+  orderConfirmations: boolean;
+  orderModifications: boolean;
+  menuUpdates: boolean;
+  deliveryMethod: NotificationDeliveryMethod;
+  frequency: NotificationFrequency;
+}
+
 // Menu Item interface
 export interface IMenuItem {
   name: string;
@@ -35,6 +51,7 @@ export interface IUser extends Document {
   password: string;
   name: string;
   role: UserRole;
+  notificationPreferences: INotificationPreferences;
   createdAt: Date;
   updatedAt: Date;
 }

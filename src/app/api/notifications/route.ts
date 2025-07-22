@@ -4,13 +4,25 @@ import dbConnect from "@/lib/mongodb";
 import Notification from "@/models/Notification";
 import User from "@/models/User";
 import { NotificationType } from "@/types/models";
+import {
+  handleApiError,
+  UnauthorizedError,
+  NotFoundError,
+  ValidationError,
+  ForbiddenError,
+} from "@/lib/api-error-handler";
+import {
+  filterNotificationsByPreferences,
+  sendNotificationToUser,
+  shouldReceiveNotification,
+} from "@/lib/notification-preferences";
 
 // GET /api/notifications - Get notifications for the current user
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      throw new UnauthorizedError();
     }
 
     await dbConnect();
@@ -18,7 +30,7 @@ export async function GET(request: NextRequest) {
     // Get user to find their ID
     const user = await User.findOne({ email: session.user.email });
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      throw new NotFoundError("User not found");
     }
 
     const { searchParams } = new URL(request.url);
@@ -26,7 +38,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "50");
 
     // Build query - get user-specific notifications and system-wide notifications
-    const query: any = {
+    const query: Record<string, any> = {
       $or: [
         { userId: user._id },
         { userId: null }, // system-wide notifications
@@ -37,18 +49,21 @@ export async function GET(request: NextRequest) {
       query.read = false;
     }
 
-    const notifications = await Notification.find(query)
+    const allNotifications = await Notification.find(query)
       .sort({ createdAt: -1 })
-      .limit(limit)
+      .limit(limit * 2) // Get more to account for filtering
       .lean();
 
-    return NextResponse.json({ notifications });
+    // Filter notifications based on user preferences
+    const filteredNotifications = allNotifications
+      .filter((notification) =>
+        filterNotificationsByPreferences(user, notification.type)
+      )
+      .slice(0, limit);
+
+    return NextResponse.json({ notifications: filteredNotifications });
   } catch (error) {
-    console.error("Error fetching notifications:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch notifications" },
-      { status: 500 }
-    );
+    return handleApiError(error, "/api/notifications");
   }
 }
 
@@ -57,7 +72,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      throw new UnauthorizedError();
     }
 
     await dbConnect();
@@ -65,7 +80,7 @@ export async function POST(request: NextRequest) {
     // Get user to check permissions
     const user = await User.findOne({ email: session.user.email });
     if (!user || (user.role !== "admin" && user.role !== "superuser")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw new ForbiddenError();
     }
 
     const body = await request.json();
@@ -73,10 +88,7 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!type || !message) {
-      return NextResponse.json(
-        { error: "Type and message are required" },
-        { status: 400 }
-      );
+      throw new ValidationError("Type and message are required");
     }
 
     // Validate notification type
@@ -87,25 +99,48 @@ export async function POST(request: NextRequest) {
       "menu_updated",
     ];
     if (!validTypes.includes(type)) {
-      return NextResponse.json(
-        { error: "Invalid notification type" },
-        { status: 400 }
-      );
+      throw new ValidationError("Invalid notification type");
     }
 
-    // If userId is provided, validate it exists
+    // If userId is provided, validate it exists and check preferences
     if (userId) {
       const targetUser = await User.findById(userId);
       if (!targetUser) {
+        throw new NotFoundError("Target user not found");
+      }
+
+      // Send notification based on user preferences
+      const result = await sendNotificationToUser(targetUser, type, message);
+
+      if (!result.inApp && !result.email) {
         return NextResponse.json(
-          { error: "Target user not found" },
-          { status: 404 }
+          {
+            message: "Notification not sent due to user preferences",
+            skipped: true,
+          },
+          { status: 200 }
         );
       }
+
+      // Find the created notification to include in response
+      const notification = await Notification.findOne({
+        userId: targetUser._id,
+        type,
+        message,
+      }).sort({ createdAt: -1 });
+
+      return NextResponse.json(
+        {
+          notification,
+          deliveryMethods: result,
+        },
+        { status: 201 }
+      );
     }
 
+    // For system-wide notifications
     const notification = new Notification({
-      userId: userId || null,
+      userId: null,
       type,
       message,
       read: false,
@@ -115,10 +150,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ notification }, { status: 201 });
   } catch (error) {
-    console.error("Error creating notification:", error);
-    return NextResponse.json(
-      { error: "Failed to create notification" },
-      { status: 500 }
-    );
+    return handleApiError(error, "/api/notifications");
   }
 }

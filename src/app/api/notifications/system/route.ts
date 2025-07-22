@@ -4,6 +4,11 @@ import dbConnect from "@/lib/mongodb";
 import Notification from "@/models/Notification";
 import User from "@/models/User";
 import { NotificationType } from "@/types/models";
+import {
+  shouldReceiveNotification,
+  sendNotificationToUser,
+} from "@/lib/notification-preferences";
+import { handleApiError } from "@/lib/api-error-handler";
 
 // POST /api/notifications/system - Create system-wide notifications (admin only)
 export async function POST(request: NextRequest) {
@@ -53,14 +58,28 @@ export async function POST(request: NextRequest) {
       for (const userId of userIds) {
         const targetUser = await User.findById(userId);
         if (targetUser) {
-          const notification = new Notification({
-            userId: targetUser._id,
-            type,
-            message,
-            read: false,
-          });
-          await notification.save();
-          notifications.push(notification);
+          // Check if user should receive this notification based on their preferences
+          if (shouldReceiveNotification(targetUser, type)) {
+            // Send notification based on user's delivery preferences
+            const result = await sendNotificationToUser(
+              targetUser,
+              type,
+              message
+            );
+
+            if (result.inApp) {
+              // Find the created notification to include in response
+              const notification = await Notification.findOne({
+                userId: targetUser._id,
+                type,
+                message,
+              }).sort({ createdAt: -1 });
+
+              if (notification) {
+                notifications.push(notification);
+              }
+            }
+          }
         }
       }
     } else {
@@ -73,6 +92,18 @@ export async function POST(request: NextRequest) {
       });
       await notification.save();
       notifications.push(notification);
+
+      // For system-wide notifications, also send emails to users who prefer email delivery
+      const users = await User.find({
+        "notificationPreferences.deliveryMethod": { $in: ["email", "both"] },
+      });
+
+      for (const user of users) {
+        if (shouldReceiveNotification(user, type)) {
+          // Only send email, as the in-app notification is already created as system-wide
+          await sendNotificationToUser(user, type, message);
+        }
+      }
     }
 
     return NextResponse.json(
@@ -83,11 +114,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error creating system notification:", error);
-    return NextResponse.json(
-      { error: "Failed to create system notification" },
-      { status: 500 }
-    );
+    return handleApiError(error, "/api/notifications/system");
   }
 }
 
@@ -131,10 +158,6 @@ export async function GET(request: NextRequest) {
       recent: recentNotifications,
     });
   } catch (error) {
-    console.error("Error fetching system notification stats:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch system notification stats" },
-      { status: 500 }
-    );
+    return handleApiError(error, "/api/notifications/system");
   }
 }

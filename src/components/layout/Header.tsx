@@ -1,14 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { InstallButton } from "@/components/pwa/InstallPrompt";
+import NotificationPreferences from "@/components/user/NotificationPreferences";
 import { signOut } from "next-auth/react";
 import Link from "next/link";
+import { Settings, User } from "lucide-react";
 
 export function Header() {
   const { user, isLoading } = useAuth();
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
 
   const handleSignOut = () => {
     signOut({ callbackUrl: "/auth/login" });
@@ -72,6 +83,31 @@ export function Header() {
 
             {/* Notification Bell */}
             <NotificationBell />
+
+            {/* User Profile Link */}
+            <Link href="/profile">
+              <Button variant="outline" size="sm" className="hidden sm:flex">
+                <User className="h-4 w-4 mr-2" />
+                Profile
+              </Button>
+            </Link>
+
+            {/* Notification Preferences */}
+            <Dialog open={preferencesOpen} onOpenChange={setPreferencesOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="hidden sm:flex">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Notification Preferences</DialogTitle>
+                </DialogHeader>
+                <NotificationPreferences
+                  onClose={() => setPreferencesOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
 
             {/* PWA Install Button */}
             <InstallButton className="hidden sm:flex" />

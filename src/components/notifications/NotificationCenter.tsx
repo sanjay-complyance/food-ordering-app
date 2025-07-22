@@ -106,15 +106,20 @@ export function NotificationCenter({
 
   return (
     <Card className="border border-gray-200 shadow-xl max-w-xs bg-white rounded-lg">
-              <CardHeader className="pb-1.5 px-2 pt-2 bg-white border-b border-gray-200">
-                <div className="flex items-center justify-between">
+      <CardHeader className="pb-1.5 px-2 pt-2 bg-white border-b border-gray-200">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="p-1 bg-blue-50 rounded">
               <Bell className="h-3.5 w-3.5 text-blue-600" />
             </div>
-            <CardTitle className="text-sm font-semibold text-gray-900">Notifications</CardTitle>
+            <CardTitle className="text-sm font-semibold text-gray-900">
+              Notifications
+            </CardTitle>
             {unreadCount > 0 && (
-              <Badge variant="secondary" className="text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 px-1 py-0.5 rounded-full">
+              <Badge
+                variant="secondary"
+                className="text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 px-1 py-0.5 rounded-full"
+              >
                 {unreadCount} new
               </Badge>
             )}
@@ -125,19 +130,20 @@ export function NotificationCenter({
               size="sm"
               onClick={onRefresh}
               className="h-6 w-6 p-0 hover:bg-gray-100"
+              data-testid="refresh-button"
             >
               <RefreshCw className="h-3 w-3 text-gray-600" />
             </Button>
             {unreadCount > 0 && (
-                              <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onMarkAllAsRead}
-                  className="h-5 px-1 text-xs font-medium hover:bg-gray-100"
-                >
-                  <CheckCheck className="h-2.5 w-2.5 mr-0.5" />
-                  Mark all read
-                </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onMarkAllAsRead}
+                className="h-5 px-1 text-xs font-medium hover:bg-gray-100"
+              >
+                <CheckCheck className="h-2.5 w-2.5 mr-0.5" />
+                Mark all read
+              </Button>
             )}
           </div>
         </div>
@@ -148,10 +154,12 @@ export function NotificationCenter({
             <div className="p-1.5 bg-gray-50 rounded-full w-8 h-8 mx-auto mb-1.5 flex items-center justify-center">
               <Bell className="h-4 w-4 text-gray-400" />
             </div>
-            <p className="text-xs font-medium text-gray-700 mb-1">No notifications yet</p>
-                          <p className="text-xs text-gray-500">
-                You'll see order reminders and updates here
-              </p>
+            <p className="text-xs font-medium text-gray-700 mb-1">
+              No notifications yet
+            </p>
+            <p className="text-xs text-gray-500">
+              You'll see order reminders and updates here
+            </p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -169,24 +177,24 @@ export function NotificationCenter({
                 >
                   <div className="flex items-start gap-1.5">
                     <div
-                      className={`flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm rounded-full border ${typeStyle.iconBg} ${
-                        notification.read ? "opacity-70" : "opacity-100"
-                      }`}
+                      className={`flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm rounded-full border ${
+                        typeStyle.iconBg
+                      } ${notification.read ? "opacity-70" : "opacity-100"}`}
                     >
                       {typeStyle.icon}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1.5 mb-0.5">
-                                          <Badge
-                    variant="secondary"
-                    className={`text-xs font-medium px-1 py-0.5 ${typeStyle.badge}`}
-                  >
-                    {typeStyle.label}
-                  </Badge>
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs font-medium px-1 py-0.5 ${typeStyle.badge}`}
+                        >
+                          {typeStyle.label}
+                        </Badge>
                         <div className="flex items-center gap-1">
-                                           <span className="text-xs text-gray-400">
-                   {formatNotificationTime(notification.createdAt)}
-                 </span>
+                          <span className="text-xs text-gray-400">
+                            {formatNotificationTime(notification.createdAt)}
+                          </span>
                           {!notification.read && (
                             <Button
                               variant="ghost"
