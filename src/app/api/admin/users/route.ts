@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     // Find all users
     const users = await User.find({}, "email name role createdAt").sort({
       createdAt: -1,
-    });
+    }).lean();
 
     return NextResponse.json({ users });
   } catch (error) {

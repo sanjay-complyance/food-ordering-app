@@ -6,25 +6,30 @@ vi.mock("@/lib/mongodb", () => ({
   default: vi.fn(),
 }));
 
-vi.mock("@/models/Notification", () => ({
-  default: {
-    find: vi.fn(),
-    findOne: vi.fn(),
-    findById: vi.fn(),
-    create: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    findOneAndDelete: vi.fn(),
-    save: vi.fn(),
-  },
-}));
+vi.mock("@/models/Notification", () => {
+  const NotificationMock = vi.fn();
+  (NotificationMock as any).find = vi.fn();
+  (NotificationMock as any).findOne = vi.fn();
+  (NotificationMock as any).findById = vi.fn();
+  (NotificationMock as any).create = vi.fn();
+  (NotificationMock as any).findOneAndUpdate = vi.fn();
+  (NotificationMock as any).findOneAndDelete = vi.fn();
+  (NotificationMock as any).save = vi.fn();
+  return { default: NotificationMock };
+});
 
-// Mock User model
-vi.mock("@/models/User", () => ({
-  default: {
-    findOne: vi.fn(),
-    findById: vi.fn(),
-  },
-}));
+// Mock User as a constructor with static methods
+vi.mock("@/models/User", () => {
+  const UserMock = vi.fn();
+  (UserMock as any).find = vi.fn();
+  (UserMock as any).findOne = vi.fn();
+  (UserMock as any).findById = vi.fn();
+  (UserMock as any).create = vi.fn();
+  (UserMock as any).findOneAndUpdate = vi.fn();
+  (UserMock as any).findOneAndDelete = vi.fn();
+  (UserMock as any).save = vi.fn();
+  return { default: UserMock };
+});
 
 // Mock notification-preferences functions
 vi.mock("@/lib/notification-preferences", () => ({
@@ -73,8 +78,10 @@ describe("Notifications API", () => {
       }));
 
       // Mock User model
-      vi.mocked(User.findOne).mockResolvedValue({ _id: "user1", email: "user@example.com", role: "user" });
-      vi.mocked(User.findById).mockResolvedValue({ _id: "user1", email: "user@example.com", role: "user" });
+      vi.mocked(User.findOne).mockReturnValue({
+        exec: vi.fn().mockResolvedValue({ _id: "user1", email: "user@example.com", role: "user", notificationPreferences: { frequency: "immediate" } })
+      });
+      vi.mocked(User.findById).mockResolvedValue({ _id: "user1", email: "user@example.com", role: "user", notificationPreferences: { frequency: "immediate" } });
 
       // Mock notification data
       const mockNotifications = [
@@ -96,11 +103,14 @@ describe("Notifications API", () => {
         },
       ];
 
-      vi.mocked(Notification.find).mockReturnValue({
+      // Mock .find().sort().limit().lean()
+      (Notification as any).find.mockReturnValue({
         sort: vi.fn().mockReturnValue({
-          exec: vi.fn().mockResolvedValue(mockNotifications),
+          limit: vi.fn().mockReturnValue({
+            lean: vi.fn().mockResolvedValue(mockNotifications),
+          }),
         }),
-      } as never);
+      });
 
       const request = new NextRequest(
         "http://localhost:3000/api/notifications"
@@ -137,7 +147,7 @@ describe("Notifications API", () => {
       const data = await response.json();
 
       expect(response.status).toBe(500);
-      expect(data.error).toBe("Failed to fetch notifications");
+      expect(data.error).toBe("Internal server error");
     });
   });
 
@@ -170,6 +180,15 @@ describe("Notifications API", () => {
       vi.mocked(Notification.create).mockResolvedValue(
         mockCreatedNotification as never
       );
+
+      // Patch sendNotificationToUser to always return { inApp: true, email: false }
+      const notificationPrefs = await import("@/lib/notification-preferences");
+      vi.mocked(notificationPrefs.sendNotificationToUser).mockResolvedValue({ inApp: true, email: false });
+
+      // Patch Notification.findOne to support .sort()
+      vi.mocked(Notification.findOne).mockReturnValue({
+        sort: vi.fn().mockResolvedValue(mockCreatedNotification),
+      } as never);
 
       const request = new NextRequest(
         "http://localhost:3000/api/notifications",
@@ -220,8 +239,8 @@ describe("Notifications API", () => {
       const response = await POST(request);
       const data = await response.json();
 
-      expect(response.status).toBe(401);
-      expect(data.error).toBe("Unauthorized");
+      expect(response.status).toBe(403);
+      expect(data.error).toBe("Forbidden");
     });
   });
 
@@ -262,10 +281,19 @@ describe("Notifications API", () => {
         mockUpdatedNotification as never
       );
 
+      // Patch Notification.findById to return the notification
+      vi.mocked(Notification.findById).mockResolvedValue({
+        _id: "notification1",
+        userId: "user1",
+        read: false,
+        save: vi.fn().mockResolvedValue(undefined),
+      } as never);
+
       const request = new NextRequest(
         "http://localhost:3000/api/notifications/notification1",
         {
           method: "PUT",
+          body: JSON.stringify({ read: true }),
         }
       );
 
@@ -300,10 +328,19 @@ describe("Notifications API", () => {
         read: false,
       } as never);
 
+      // Patch Notification.findById to return a notification with a different userId
+      vi.mocked(Notification.findById).mockResolvedValue({
+        _id: "notification1",
+        userId: "user2",
+        read: false,
+        save: vi.fn().mockResolvedValue(undefined),
+      } as never);
+
       const request = new NextRequest(
         "http://localhost:3000/api/notifications/notification1",
         {
           method: "PUT",
+          body: JSON.stringify({ read: true }),
         }
       );
 
@@ -341,6 +378,16 @@ describe("Notifications API", () => {
         createdAt: new Date(),
       } as never);
 
+      // Patch Notification constructor to return an object with .save()
+      (Notification as any).mockImplementation(function (this: any, data: any) {
+        return {
+          ...data,
+          save: vi.fn().mockResolvedValue(undefined),
+        };
+      });
+      // Patch User.find to return a promise resolving to an empty array
+      vi.mocked(User.find).mockImplementation(() => Promise.resolve([]));
+
       const request = new NextRequest(
         "http://localhost:3000/api/notifications/system",
         {
@@ -356,9 +403,10 @@ describe("Notifications API", () => {
       const data = await response.json();
 
       expect(response.status).toBe(201);
-      expect(data.notification).toBeDefined();
-      expect(data.notification.type).toBe("menu_updated");
-      expect(data.notification.message).toBe("System maintenance scheduled");
+      expect(Array.isArray(data.notifications)).toBe(true);
+      expect(data.notifications.length).toBeGreaterThan(0);
+      expect(data.notifications[0].type).toBe("menu_updated");
+      expect(data.notifications[0].message).toBe("System maintenance scheduled");
     });
 
     it("should return 401 for non-admin users", async () => {
@@ -390,8 +438,8 @@ describe("Notifications API", () => {
       const response = await POST_SYSTEM(request);
       const data = await response.json();
 
-      expect(response.status).toBe(401);
-      expect(data.error).toBe("Unauthorized");
+      expect(response.status).toBe(403);
+      expect(data.error).toBe("Forbidden");
     });
   });
 });

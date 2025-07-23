@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import connectToDatabase from "@/lib/mongodb";
 import { MenuItem } from "@/models/MenuItem";
 
@@ -11,7 +10,7 @@ export async function GET(request: NextRequest) {
   try {
     console.log("Current Menu API: Starting request");
     
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     console.log("Current Menu API: Session check", { 
       hasSession: !!session, 
       user: session?.user?.email 
@@ -27,6 +26,10 @@ export async function GET(request: NextRequest) {
     console.log("Current Menu API: Fetching available menu items");
     const items = await MenuItem.find({ available: true }).sort({ createdAt: -1 });
     console.log("Current Menu API: Found", items.length, "available items");
+
+    if (!items.length) {
+      return NextResponse.json({ error: "No menu found for today" }, { status: 404 });
+    }
 
     // Create a menu object with the available items
     const menu = {

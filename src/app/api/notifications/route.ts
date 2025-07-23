@@ -27,8 +27,8 @@ export async function GET(request: NextRequest) {
 
     await dbConnect();
 
-    // Get user to find their ID
-    const user = await User.findOne({ email: session.user.email });
+    // Find user by email
+    const user = await User.findOne({ email: session.user.email }).exec();
     if (!user) {
       throw new NotFoundError("User not found");
     }

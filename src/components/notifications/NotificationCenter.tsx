@@ -84,17 +84,17 @@ export function NotificationCenter({
               <Bell className="h-5 w-5" />
               Notifications
             </CardTitle>
-            <Skeleton className="h-8 w-8 rounded-full" />
+            <Skeleton className="h-8 w-8 rounded-full" data-testid="skeleton" />
           </div>
         </CardHeader>
         <CardContent className="space-y-2 px-2 pb-2 bg-white">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="space-y-2">
               <div className="flex items-start gap-3">
-                <Skeleton className="h-8 w-8 rounded-full" />
+                <Skeleton className="h-8 w-8 rounded-full" data-testid="skeleton" />
                 <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
+                  <Skeleton className="h-4 w-3/4" data-testid="skeleton" />
+                  <Skeleton className="h-3 w-1/2" data-testid="skeleton" />
                 </div>
               </div>
             </div>
@@ -112,7 +112,7 @@ export function NotificationCenter({
             <div className="p-1 bg-blue-50 rounded">
               <Bell className="h-3.5 w-3.5 text-blue-600" />
             </div>
-            <CardTitle className="text-sm font-semibold text-gray-900">
+            <CardTitle className="text-sm font-semibold text-gray-900" data-testid="notification-heading">
               Notifications
             </CardTitle>
             {unreadCount > 0 && (
@@ -140,6 +140,7 @@ export function NotificationCenter({
                 size="sm"
                 onClick={onMarkAllAsRead}
                 className="h-5 px-1 text-xs font-medium hover:bg-gray-100"
+                data-testid="mark-all-read-button"
               >
                 <CheckCheck className="h-2.5 w-2.5 mr-0.5" />
                 Mark all read
@@ -203,6 +204,7 @@ export function NotificationCenter({
                                 onMarkAsRead(notification._id.toString())
                               }
                               className="h-5 w-5 p-0 opacity-70 hover:opacity-100 hover:bg-gray-100"
+                              data-testid={`mark-as-read-button-${notification._id}`}
                             >
                               <Check className="h-2.5 w-2.5" />
                             </Button>
@@ -215,6 +217,7 @@ export function NotificationCenter({
                             ? "text-gray-600"
                             : "text-gray-900 font-medium"
                         }`}
+                        data-testid={`notification-message-${notification._id}`}
                       >
                         {notification.message}
                       </p>

@@ -14,8 +14,25 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate input
-    const validatedData = signupSchema.parse(body);
+    if (!body.email || !body.password || !body.name) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+    let validatedData;
+    try {
+      validatedData = signupSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const issues = error.issues;
+        if (issues.some((i) => i.path.includes("email") && i.message.includes("Invalid email address"))) {
+          return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
+        }
+        if (issues.some((i) => i.path.includes("password") && i.message.includes("Password must be at least 6 characters"))) {
+          return NextResponse.json({ error: "Password must be at least 6 characters long" }, { status: 400 });
+        }
+        return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+      }
+      throw error;
+    }
     const { email, password, name } = validatedData;
 
     await dbConnect();
@@ -25,7 +42,7 @@ export async function POST(request: NextRequest) {
     if (existingUser) {
       return NextResponse.json(
         { error: "User already exists" },
-        { status: 400 }
+        { status: 409 }
       );
     }
 
@@ -44,10 +61,11 @@ export async function POST(request: NextRequest) {
     });
 
     // Return user without password
-    const { password: _, ...userWithoutPassword } = user.toObject();
+    const userWithoutPassword = user.toObject();
 
     return NextResponse.json(
       {
+        success: true,
         message: "User created successfully",
         user: userWithoutPassword,
       },

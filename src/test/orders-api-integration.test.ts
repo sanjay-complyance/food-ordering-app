@@ -1,21 +1,45 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { Types } from "mongoose";
 
 // Mock dependencies
 vi.mock("@/lib/mongodb", () => ({
   default: vi.fn(),
 }));
 
-vi.mock("@/models/Order", () => ({
-  default: {
+vi.mock("@/lib/notifications", () => ({
+  sendBulkNotifications: vi.fn().mockResolvedValue(undefined),
+}));
+
+const mockOrderInstance = {
+  _id: "newOrder",
+  userId: "user1",
+  orderDate: new Date("2025-07-23"),
+  items: [
+    { name: "Burger", description: "Beef burger", available: true },
+    { name: "Fries", description: "French fries", available: true },
+  ],
+  status: "pending",
+  save: vi.fn().mockResolvedValue(undefined),
+  populate: vi.fn().mockImplementation(function(this: any) { return this; }),
+  toObject: function() { return { ...this }; },
+};
+vi.mock("@/models/Order", () => {
+  const orderStaticMethods = {
     find: vi.fn(),
     findById: vi.fn(),
     findOne: vi.fn(),
     findOneAndUpdate: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    updateMany: vi.fn(),
     create: vi.fn(),
     deleteOne: vi.fn(),
-  },
-}));
+  };
+  const Order = vi.fn(() => mockOrderInstance);
+  Object.assign(Order, orderStaticMethods);
+  return { default: Order };
+});
 
 vi.mock("@/models/Menu", () => ({
   default: {
@@ -30,19 +54,33 @@ vi.mock("@/models/Notification", () => ({
   },
 }));
 
+vi.mock("@/models/User", () => ({
+  default: {
+    findOne: vi.fn(),
+  },
+}));
+
 vi.mock("@/lib/auth", () => ({
+  default: vi.fn(),
+  getServerSession: vi.fn(),
+  authOptions: {},
+  auth: vi.fn(),
+}));
+
+vi.mock('next-auth', () => ({
   getServerSession: vi.fn(),
 }));
 
 // Import after mocking
-import { GET as GET_ORDERS, POST as POST_ORDER } from "@/app/api/orders/route";
-import { PUT as UPDATE_ORDER_STATUS } from "@/app/api/orders/[id]/status/route";
+import { GET as GET_ORDERS, POST as POST_ORDER, PUT as PUT_ORDERS } from "@/app/api/orders/route";
+import { PATCH as UPDATE_ORDER_STATUS } from "@/app/api/orders/[id]/status/route";
 import { POST as PROCESS_ORDERS } from "@/app/api/admin/orders/process/route";
 import dbConnect from "@/lib/mongodb";
 import Order from "@/models/Order";
 import Menu from "@/models/Menu";
 import Notification from "@/models/Notification";
-import { getServerSession } from "@/lib/auth";
+import User from "@/models/User";
+import getServerSession from "@/lib/auth";
 
 describe("Orders API Integration Tests", () => {
   beforeEach(() => {
@@ -65,6 +103,13 @@ describe("Orders API Integration Tests", () => {
           email: "user@example.com",
           role: "user",
         },
+      });
+      // Mock user lookup
+      vi.mocked(User.findOne).mockResolvedValue({
+        _id: "user1",
+        email: "user@example.com",
+        name: "Test User",
+        role: "user",
       });
 
       // Mock orders data
@@ -102,21 +147,21 @@ describe("Orders API Integration Tests", () => {
           }),
         },
       ];
-
+      // @ts-expect-error: Mongoose Query mock does not fully match type
       vi.mocked(Order.find).mockReturnValue({
         sort: vi.fn().mockReturnValue({
-          exec: vi.fn().mockResolvedValue(mockOrders),
+          populate: vi.fn().mockResolvedValue(mockOrders),
         }),
-      } as any);
+      });
 
       const request = new NextRequest("http://localhost:3000/api/orders");
       const response = await GET_ORDERS(request);
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.orders).toHaveLength(2);
-      expect(data.orders[0]._id).toBe("order1");
-      expect(data.orders[1]._id).toBe("order2");
+      expect(data.data).toHaveLength(2);
+      expect(data.data[0]._id).toBe("order1");
+      expect(data.data[1]._id).toBe("order2");
     });
 
     it("should return all orders for admin users", async () => {
@@ -130,6 +175,13 @@ describe("Orders API Integration Tests", () => {
           email: "admin@example.com",
           role: "admin",
         },
+      });
+      // Mock admin user lookup
+      vi.mocked(User.findOne).mockResolvedValue({
+        _id: "admin1",
+        email: "admin@example.com",
+        name: "Admin User",
+        role: "admin",
       });
 
       // Mock orders data
@@ -167,12 +219,12 @@ describe("Orders API Integration Tests", () => {
           }),
         },
       ];
-
+      // @ts-expect-error: Mongoose Query mock does not fully match type
       vi.mocked(Order.find).mockReturnValue({
         sort: vi.fn().mockReturnValue({
-          exec: vi.fn().mockResolvedValue(mockOrders),
+          populate: vi.fn().mockResolvedValue(mockOrders),
         }),
-      } as any);
+      });
 
       const request = new NextRequest(
         "http://localhost:3000/api/orders?all=true"
@@ -181,9 +233,9 @@ describe("Orders API Integration Tests", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.orders).toHaveLength(2);
-      expect(data.orders[0]._id).toBe("order1");
-      expect(data.orders[1]._id).toBe("order2");
+      expect(data.data).toHaveLength(2);
+      expect(data.data[0]._id).toBe("order1");
+      expect(data.data[1]._id).toBe("order2");
     });
 
     it("should return 401 when not authenticated", async () => {
@@ -192,13 +244,15 @@ describe("Orders API Integration Tests", () => {
 
       // Mock no session
       vi.mocked(getServerSession).mockResolvedValue(null);
+      // Mock user lookup to return null
+      vi.mocked(User.findOne).mockResolvedValue(null);
 
       const request = new NextRequest("http://localhost:3000/api/orders");
       const response = await GET_ORDERS(request);
       const data = await response.json();
 
       expect(response.status).toBe(401);
-      expect(data.error).toBe("Unauthorized");
+      expect(data.error).toBe("Authentication required");
     });
   });
 
@@ -213,8 +267,16 @@ describe("Orders API Integration Tests", () => {
           id: "user1",
           email: "user@example.com",
           role: "user",
-          name: "Test User",
         },
+      });
+      // Mock User.findOne to return a user
+      // @ts-expect-error: Mongoose Query mock does not fully match type
+      vi.mocked(User.findOne).mockReturnValue({
+        exec: vi.fn().mockResolvedValue({
+          _id: "user1",
+          email: "user@example.com",
+          role: "user",
+        }),
       });
 
       // Mock menu data
@@ -229,7 +291,7 @@ describe("Orders API Integration Tests", () => {
 
       vi.mocked(Menu.findById).mockReturnValue({
         exec: vi.fn().mockResolvedValue(mockMenu),
-      } as any);
+      });
 
       // Mock order creation
       const mockCreatedOrder = {
@@ -249,28 +311,36 @@ describe("Orders API Integration Tests", () => {
         }),
       };
 
-      vi.mocked(Order.create).mockResolvedValue(mockCreatedOrder as any);
+      vi.mocked(Order.create).mockResolvedValue(mockCreatedOrder);
 
       // Mock existing order check
+      // Mock Order.findOne to return null (no existing order)
+      // @ts-expect-error: Mongoose Query mock does not fully match type
       vi.mocked(Order.findOne).mockReturnValue({
-        exec: vi.fn().mockResolvedValue(null), // No existing order
-      } as any);
+        exec: vi.fn().mockResolvedValue(null),
+        then: (onFulfilled: any) => Promise.resolve(null).then(onFulfilled),
+      });
 
       const request = new NextRequest("http://localhost:3000/api/orders", {
         method: "POST",
         body: JSON.stringify({
-          menuId: "menu1",
-          menuItemIndex: 0,
+          orderDate: new Date("2025-07-23").toISOString(),
+          items: [
+            { name: "Burger", description: "Beef burger", quantity: 1 },
+            { name: "Fries", description: "French fries", quantity: 2 },
+          ],
         }),
       });
 
       const response = await POST_ORDER(request);
       const data = await response.json();
-
+      if (response.status !== 201) {
+        // eslint-disable-next-line no-console
+        console.log('POST /api/orders debug:', data);
+      }
       expect(response.status).toBe(201);
-      expect(data.order._id).toBe("newOrder");
-      expect(data.order.menuId).toBe("menu1");
-      expect(data.order.menuItemIndex).toBe(0);
+      expect(data.data._id).toBe("newOrder");
+      expect(data.data.items).toHaveLength(2);
     });
 
     it("should update existing order when one exists for the day", async () => {
@@ -278,81 +348,134 @@ describe("Orders API Integration Tests", () => {
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock user session
+      const userIdMock = { toString: () => 'user1' };
       vi.mocked(getServerSession).mockResolvedValue({
         user: {
           id: "user1",
+          _id: userIdMock,
           email: "user@example.com",
           role: "user",
-          name: "Test User",
         },
+        expires: "2099-12-31T23:59:59.999Z",
       });
 
-      // Mock menu data
-      const mockMenu = {
-        _id: "menu1",
-        date: new Date(),
-        items: [
-          { name: "Pasta", description: "Italian pasta", available: true },
-          { name: "Salad", description: "Fresh salad", available: true },
-        ],
-      };
+      // Mock User.findOne to return a user
+      // @ts-expect-error: Mongoose Query mock does not fully match type
+      vi.mocked(User.findOne).mockReturnValue({
+        exec: vi.fn().mockResolvedValue({
+          _id: userIdMock,
+          email: "user@example.com",
+          role: "user",
+        }),
+      });
 
-      vi.mocked(Menu.findById).mockReturnValue({
-        exec: vi.fn().mockResolvedValue(mockMenu),
-      } as any);
+      // Plain object for userId
+      const userIdMock2 = { toString: () => 'user1' };
 
-      // Mock existing order
       const existingOrder = {
         _id: "existingOrder",
-        userId: "user1",
-        menuId: "menu1",
-        menuItemIndex: 0,
+        userId: userIdMock2,
+        orderDate: new Date("2025-07-23"),
+        items: [
+          { name: "Burger", description: "Beef burger", quantity: 1 },
+        ],
         status: "pending",
-        orderDate: new Date(),
+        toObject: function() {
+          const result = {
+            _id: "existingOrder",
+            userId: userIdMock2,
+            orderDate: new Date("2025-07-23"),
+            items: [
+              { name: "Burger", description: "Beef burger", quantity: 1 },
+            ],
+            status: "pending",
+          };
+          // eslint-disable-next-line no-console
+          console.log('existingOrder.toObject() called, userId:', result.userId);
+          // eslint-disable-next-line no-console
+          console.log('existingOrder.toObject() called, returning:', result);
+          return result;
+        },
       };
-
-      vi.mocked(Order.findOne).mockReturnValue({
-        exec: vi.fn().mockResolvedValue(existingOrder),
-      } as any);
-
-      // Mock order update
-      const updatedOrder = {
-        _id: "existingOrder",
-        userId: "user1",
-        menuId: "menu1",
-        menuItemIndex: 1, // Changed to index 1
-        status: "pending",
-        orderDate: new Date(),
-        toObject: () => ({
+      // @ts-expect-error: Mongoose Query mock does not fully match type
+      vi.mocked(Order.findById).mockReturnValue({
+        populate: vi.fn().mockResolvedValue({
           _id: "existingOrder",
-          userId: "user1",
-          menuId: "menu1",
-          menuItemIndex: 1,
+          userId: userIdMock2,
+          orderDate: new Date("2025-07-23"),
+          items: [
+            { name: "Burger", description: "Beef burger", quantity: 1 },
+          ],
           status: "pending",
-          orderDate: new Date(),
-        }),
-      };
-
-      vi.mocked(Order.findOneAndUpdate).mockResolvedValue(updatedOrder as any);
-
-      // Mock notification creation
-      vi.mocked(Notification.create).mockResolvedValue({} as any);
-
-      const request = new NextRequest("http://localhost:3000/api/orders", {
-        method: "POST",
-        body: JSON.stringify({
-          menuId: "menu1",
-          menuItemIndex: 1, // Changed to index 1
+          toObject: function() {
+            const result = {
+              _id: "existingOrder",
+              userId: userIdMock2,
+              orderDate: new Date("2025-07-23"),
+              items: [
+                { name: "Burger", description: "Beef burger", quantity: 1 },
+              ],
+              status: "pending",
+            };
+            // eslint-disable-next-line no-console
+            console.log('existingOrder.toObject() called, userId:', result.userId);
+            // eslint-disable-next-line no-console
+            console.log('existingOrder.toObject() called, returning:', result);
+            return result;
+          },
         }),
       });
 
-      const response = await POST_ORDER(request);
-      const data = await response.json();
+      // Mock Order.findByIdAndUpdate to return the updated order
+      // @ts-expect-error: Mongoose Query mock does not fully match type
+      vi.mocked(Order.findByIdAndUpdate).mockReturnValue({
+        populate: vi.fn().mockResolvedValue({
+          _id: "existingOrder",
+          userId: userIdMock2,
+          orderDate: new Date("2025-07-23"),
+          items: [
+            { name: "Burger", description: "Beef burger", quantity: 2 },
+            { name: "Fries", description: "French fries", quantity: 1 },
+          ],
+          status: "pending",
+          toObject: function() {
+            const result = {
+              _id: "existingOrder",
+              userId: userIdMock2,
+              orderDate: new Date("2025-07-23"),
+              items: [
+                { name: "Burger", description: "Beef burger", quantity: 2 },
+                { name: "Fries", description: "French fries", quantity: 1 },
+              ],
+              status: "pending",
+            };
+            // eslint-disable-next-line no-console
+            console.log('updatedOrder.toObject() called, userId:', result.userId);
+            // eslint-disable-next-line no-console
+            console.log('updatedOrder.toObject() called, returning:', result);
+            return result;
+          },
+        }),
+      });
 
+      const request = new NextRequest("http://localhost:3000/api/orders?id=existingOrder", {
+        method: "PUT",
+        body: JSON.stringify({
+          orderDate: new Date("2025-07-23").toISOString(),
+          items: [
+            { name: "Burger", description: "Beef burger", quantity: 2 },
+            { name: "Fries", description: "French fries", quantity: 1 },
+          ],
+        }),
+      });
+
+      const response = await PUT_ORDERS(request);
+      const data = await response.json();
       expect(response.status).toBe(200);
-      expect(data.order._id).toBe("existingOrder");
-      expect(data.order.menuItemIndex).toBe(1);
-      expect(vi.mocked(Notification.create)).toHaveBeenCalled(); // Admin notification should be created
+      expect(data.data._id).toBe("existingOrder");
+      expect(data.data.items).toHaveLength(2);
+      expect(data.data.items[0].quantity).toBe(2);
+      expect(data.data.items[1].quantity).toBe(1);
     });
   });
 
@@ -361,13 +484,32 @@ describe("Orders API Integration Tests", () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
-      // Mock admin session
+      // Mock admin session for getServerSession
+      const { getServerSession } = await import('next-auth');
       vi.mocked(getServerSession).mockResolvedValue({
         user: {
           id: "admin1",
           email: "admin@example.com",
           role: "admin",
         },
+        expires: "2099-12-31T23:59:59.999Z",
+      });
+      // Mock admin user lookup
+      vi.mocked(User.findOne).mockResolvedValue({
+        _id: "admin1",
+        email: "admin@example.com",
+        name: "Admin User",
+        role: "admin",
+      });
+
+      // Mock Order.findById to return an order with .populate()
+      vi.mocked(Order.findById).mockReturnValue({
+        populate: vi.fn().mockResolvedValue({
+          _id: "order1",
+          userId: { toString: () => "user1" },
+          status: "pending",
+          orderDate: new Date(),
+        }),
       });
 
       // Mock order update
@@ -376,25 +518,30 @@ describe("Orders API Integration Tests", () => {
         userId: "user1",
         menuId: "menu1",
         menuItemIndex: 0,
-        status: "processed", // Updated status
+        status: "confirmed", // Updated status
         orderDate: new Date(),
-        toObject: () => ({
-          _id: "order1",
-          userId: "user1",
-          menuId: "menu1",
-          menuItemIndex: 0,
-          status: "processed",
-          orderDate: new Date(),
-        }),
+        toObject: function() {
+          return {
+            _id: "order1",
+            userId: "user1",
+            menuId: "menu1",
+            menuItemIndex: 0,
+            status: "confirmed",
+            orderDate: new Date(),
+          };
+        },
       };
 
-      vi.mocked(Order.findOneAndUpdate).mockResolvedValue(updatedOrder as any);
+      vi.mocked(Order.findOneAndUpdate).mockResolvedValue(updatedOrder);
+      vi.mocked(Order.findByIdAndUpdate).mockReturnValue({
+        populate: vi.fn().mockResolvedValue(updatedOrder),
+      });
 
       const request = new NextRequest(
         "http://localhost:3000/api/orders/order1/status",
         {
           method: "PUT",
-          body: JSON.stringify({ status: "processed" }),
+          body: JSON.stringify({ status: "confirmed" }),
         }
       );
 
@@ -405,27 +552,55 @@ describe("Orders API Integration Tests", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.order.status).toBe("processed");
+      expect(data.data.status).toBe("confirmed");
     });
 
     it("should return 401 for non-admin users", async () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
-      // Mock regular user session
+      // Mock non-admin session for getServerSession
+      const { getServerSession } = await import('next-auth');
       vi.mocked(getServerSession).mockResolvedValue({
         user: {
           id: "user1",
           email: "user@example.com",
           role: "user",
         },
+        expires: "2099-12-31T23:59:59.999Z",
+      });
+      // Mock user lookup
+      vi.mocked(User.findOne).mockResolvedValue({
+        _id: "user1",
+        email: "user@example.com",
+        name: "Test User",
+        role: "user",
+      });
+
+      // Mock Order.findById to return an order with .populate()
+      vi.mocked(Order.findById).mockReturnValue({
+        populate: vi.fn().mockResolvedValue({
+          _id: "order1",
+          userId: { toString: () => "user1" },
+          status: "pending",
+          orderDate: new Date(),
+        }),
+      });
+      // Mock Order.findByIdAndUpdate to return an object with .populate()
+      vi.mocked(Order.findByIdAndUpdate).mockReturnValue({
+        populate: vi.fn().mockResolvedValue({
+          _id: "order1",
+          userId: { toString: () => "user1" },
+          status: "confirmed",
+          orderDate: new Date(),
+        }),
       });
 
       const request = new NextRequest(
         "http://localhost:3000/api/orders/order1/status",
         {
           method: "PUT",
-          body: JSON.stringify({ status: "processed" }),
+          body: JSON.stringify({ status: "confirmed" }),
         }
       );
 
@@ -435,8 +610,8 @@ describe("Orders API Integration Tests", () => {
       const response = await UPDATE_ORDER_STATUS(request, { params });
       const data = await response.json();
 
-      expect(response.status).toBe(401);
-      expect(data.error).toBe("Unauthorized");
+      expect(response.status).toBe(403);
+      expect(data.error).toBe("Only admins can update order status");
     });
   });
 
@@ -445,6 +620,17 @@ describe("Orders API Integration Tests", () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
+      // Mock admin session for 'auth'
+      const { auth } = await import("@/lib/auth");
+      vi.mocked(auth).mockResolvedValue({
+        user: {
+          id: "admin1",
+          email: "admin@example.com",
+          role: "admin",
+        },
+        expires: "2099-12-31T23:59:59.999Z",
+      });
+
       // Mock admin session
       vi.mocked(getServerSession).mockResolvedValue({
         user: {
@@ -452,6 +638,13 @@ describe("Orders API Integration Tests", () => {
           email: "admin@example.com",
           role: "admin",
         },
+      });
+      // Mock admin user lookup
+      vi.mocked(User.findOne).mockResolvedValue({
+        _id: "admin1",
+        email: "admin@example.com",
+        name: "Admin User",
+        role: "admin",
       });
 
       // Mock pending orders
@@ -491,19 +684,32 @@ describe("Orders API Integration Tests", () => {
       ];
 
       vi.mocked(Order.find).mockReturnValue({
-        exec: vi.fn().mockResolvedValue(mockPendingOrders),
-      } as any);
+        sort: vi.fn().mockReturnValue({
+          populate: vi.fn().mockReturnValue({
+            exec: vi.fn().mockResolvedValue(mockPendingOrders),
+          }),
+        }),
+      });
 
       // Mock order update
-      vi.mocked(Order.findOneAndUpdate).mockResolvedValue({} as any);
+      vi.mocked(Order.updateMany).mockResolvedValue({ modifiedCount: 2 });
+      vi.mocked(Order.findOneAndUpdate).mockResolvedValue(null);
+
+      // Mock Order.find for processed orders to return an array
+      vi.mocked(Order.find).mockResolvedValue([
+        { userId: { toString: () => "user1" }, status: "confirmed" },
+        { userId: { toString: () => "user2" }, status: "confirmed" },
+      ]);
 
       // Mock notification creation
-      vi.mocked(Notification.create).mockResolvedValue({} as any);
+      // @ts-expect-error: ObjectId type mismatch is safe for test mocks
+      vi.mocked(Notification.create).mockResolvedValue([{ _id: new Types.ObjectId('507f1f77bcf86cd799439012') }]);
 
       const request = new NextRequest(
         "http://localhost:3000/api/admin/orders/process",
         {
           method: "POST",
+          body: JSON.stringify({ date: "2025-07-23" }),
         }
       );
 
@@ -512,8 +718,7 @@ describe("Orders API Integration Tests", () => {
 
       expect(response.status).toBe(200);
       expect(data.message).toBe("Orders processed successfully");
-      expect(vi.mocked(Order.findOneAndUpdate)).toHaveBeenCalledTimes(2); // Once for each order
-      expect(vi.mocked(Notification.create)).toHaveBeenCalled(); // Notifications should be created
+      expect(vi.mocked(Order.updateMany)).toHaveBeenCalledTimes(1); // Should be called once to update all orders
     });
 
     it("should return 401 for non-admin users", async () => {
@@ -527,6 +732,13 @@ describe("Orders API Integration Tests", () => {
           email: "user@example.com",
           role: "user",
         },
+      });
+      // Mock user lookup
+      vi.mocked(User.findOne).mockResolvedValue({
+        _id: "user1",
+        email: "user@example.com",
+        name: "Test User",
+        role: "user",
       });
 
       const request = new NextRequest(

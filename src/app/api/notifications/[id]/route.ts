@@ -45,6 +45,8 @@ export async function PUT(
     }
 
     // Check if user has permission to modify this notification
+    // eslint-disable-next-line no-console
+    console.log('DEBUG notification.userId:', notification.userId);
     // Users can only modify their own notifications or system-wide notifications
     if (
       notification.userId &&
@@ -54,6 +56,11 @@ export async function PUT(
     }
 
     // Update the notification
+    // Debug log for notification object and prototype
+    // eslint-disable-next-line no-console
+    console.log('DEBUG notification object:', notification);
+    // eslint-disable-next-line no-console
+    console.log('DEBUG notification prototype:', Object.getPrototypeOf(notification));
     notification.read = read;
     await notification.save();
 

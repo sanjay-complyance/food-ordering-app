@@ -44,7 +44,7 @@ describe("Error Boundary", () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText("No error")).toBeInTheDocument();
+    expect(screen.getByText("No error")).toBeTruthy();
   });
 
   it("renders error fallback when there is an error", () => {
@@ -54,11 +54,11 @@ describe("Error Boundary", () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText("Something went wrong")).toBeInTheDocument();
-    expect(screen.getByText("Test error")).toBeInTheDocument();
+    expect(screen.getByText("Something went wrong")).toBeTruthy();
+    expect(screen.getByText("Test error")).toBeTruthy();
     expect(
       screen.getByRole("button", { name: /try again/i })
-    ).toBeInTheDocument();
+    ).toBeTruthy();
   });
 });
 
@@ -72,9 +72,10 @@ describe("Toast System", () => {
   });
 
   it("renders toast notifications", async () => {
+    const toastModule = await import("@/lib/toast");
+    const { ToastProvider, useToast } = toastModule;
     const TestComponent = () => {
-      const { toast } = require("@/lib/toast").useToast();
-
+      const { toast } = useToast();
       return (
         <button
           onClick={() =>
@@ -89,18 +90,15 @@ describe("Toast System", () => {
         </button>
       );
     };
-
     render(
       <ToastProvider>
         <TestComponent />
       </ToastProvider>
     );
-
     fireEvent.click(screen.getByRole("button", { name: /show toast/i }));
-
     await waitFor(() => {
-      expect(screen.getByText("Test Toast")).toBeInTheDocument();
-      expect(screen.getByText("This is a test message")).toBeInTheDocument();
+      expect(screen.getByText("Test Toast")).toBeTruthy();
+      expect(screen.getByText("This is a test message")).toBeTruthy();
     });
   });
 });
@@ -150,21 +148,19 @@ describe("Validation Schemas", () => {
 });
 
 describe("Loading Components", () => {
-  it("renders loading spinner", () => {
-    const { LoadingSpinner } = require("@/components/ui/loading");
-
+  it("renders loading spinner", async () => {
+    const loadingModule = await import("@/components/ui/loading");
+    const { LoadingSpinner } = loadingModule;
     render(<LoadingSpinner />);
-
     // Check for loading spinner element
     const spinner = document.querySelector(".animate-spin");
-    expect(spinner).toBeInTheDocument();
+    expect(spinner).toBeTruthy();
   });
 
-  it("renders menu display skeleton", () => {
-    const { MenuDisplaySkeleton } = require("@/components/ui/loading");
-
+  it("renders menu display skeleton", async () => {
+    const loadingModule = await import("@/components/ui/loading");
+    const { MenuDisplaySkeleton } = loadingModule;
     render(<MenuDisplaySkeleton />);
-
     // Check for skeleton elements
     const skeletons = document.querySelectorAll('[class*="animate-pulse"]');
     expect(skeletons.length).toBeGreaterThan(0);

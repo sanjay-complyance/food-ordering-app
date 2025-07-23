@@ -16,7 +16,7 @@ vi.mock("@/models/User", () => ({
 }));
 
 vi.mock("@/lib/auth", () => ({
-  getServerSession: vi.fn(),
+  auth: vi.fn(),
 }));
 
 // Import after mocking
@@ -24,10 +24,11 @@ import { GET as GET_USERS } from "@/app/api/admin/users/route";
 import { PUT as UPDATE_USER_ROLE } from "@/app/api/admin/users/[id]/role/route";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
-import { getServerSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 
 describe("Admin API Integration Tests", () => {
   beforeEach(() => {
+    process.env.SUPERUSER_EMAIL = "sanjay@complyance.io";
     vi.clearAllMocks();
   });
 
@@ -41,77 +42,72 @@ describe("Admin API Integration Tests", () => {
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock superuser session
-      vi.mocked(getServerSession).mockResolvedValue({
+      vi.mocked(auth).mockResolvedValue({
         user: {
           id: "super1",
           email: "sanjay@complyance.io", // Superuser email from requirements
           role: "superuser",
         },
+        expires: "2099-12-31T23:59:59.999Z",
       });
 
-      // Mock users data
+      // Mock users data (plain objects, not Mongoose docs)
       const mockUsers = [
         {
           _id: "user1",
           name: "Regular User",
           email: "user@example.com",
           role: "user",
-          toObject: () => ({
-            _id: "user1",
-            name: "Regular User",
-            email: "user@example.com",
-            role: "user",
-          }),
         },
         {
           _id: "admin1",
           name: "Admin User",
           email: "admin@example.com",
           role: "admin",
-          toObject: () => ({
-            _id: "admin1",
-            name: "Admin User",
-            email: "admin@example.com",
-            role: "admin",
-          }),
         },
       ];
 
       vi.mocked(User.find).mockReturnValue({
         sort: vi.fn().mockReturnValue({
           exec: vi.fn().mockResolvedValue(mockUsers),
+          lean: vi.fn().mockResolvedValue(mockUsers),
         }),
-      } as any);
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       const request = new NextRequest("http://localhost:3000/api/admin/users");
       const response = await GET_USERS(request);
       const data = await response.json();
 
+      // Log the shape for debugging
+      // console.log('data.users:', data.users);
+
       expect(response.status).toBe(200);
+      expect(Array.isArray(data.users)).toBe(true);
       expect(data.users).toHaveLength(2);
       expect(data.users[0]._id).toBe("user1");
       expect(data.users[1]._id).toBe("admin1");
     });
 
-    it("should return 401 for non-superuser users", async () => {
+    it("should return 403 for non-superuser users", async () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock admin session (not superuser)
-      vi.mocked(getServerSession).mockResolvedValue({
+      vi.mocked(auth).mockResolvedValue({
         user: {
           id: "admin1",
           email: "admin@example.com",
           role: "admin", // Admin but not superuser
         },
+        expires: "2099-12-31T23:59:59.999Z",
       });
 
       const request = new NextRequest("http://localhost:3000/api/admin/users");
       const response = await GET_USERS(request);
       const data = await response.json();
 
-      expect(response.status).toBe(401);
-      expect(data.error).toBe("Unauthorized");
+      expect(response.status).toBe(403);
+      expect(data.error).toBe("Forbidden");
     });
   });
 
@@ -121,39 +117,27 @@ describe("Admin API Integration Tests", () => {
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock superuser session
-      vi.mocked(getServerSession).mockResolvedValue({
+      vi.mocked(auth).mockResolvedValue({
         user: {
           id: "super1",
           email: "sanjay@complyance.io", // Superuser email from requirements
           role: "superuser",
         },
+        expires: "2099-12-31T23:59:59.999Z",
       });
 
       // Mock user to update
-      vi.mocked(User.findById).mockReturnValue({
-        exec: vi.fn().mockResolvedValue({
-          _id: "user1",
-          name: "Regular User",
-          email: "user@example.com",
-          role: "user",
-        }),
-      } as any);
-
-      // Mock user update
-      const updatedUser = {
+      const userToUpdate = {
         _id: "user1",
         name: "Regular User",
         email: "user@example.com",
-        role: "admin", // Updated role
-        toObject: () => ({
-          _id: "user1",
-          name: "Regular User",
-          email: "user@example.com",
-          role: "admin",
-        }),
+        role: "user",
+        save: vi.fn().mockResolvedValue(undefined),
       };
+      vi.mocked(User.findById).mockReturnValue(userToUpdate as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-      vi.mocked(User.findOneAndUpdate).mockResolvedValue(updatedUser as any);
+      // Mock user update (simulate save)
+      userToUpdate.role = "admin";
 
       const request = new NextRequest(
         "http://localhost:3000/api/admin/users/user1/role",
@@ -170,20 +154,22 @@ describe("Admin API Integration Tests", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.user.role).toBe("admin");
+      expect(data.success).toBe(true);
+      expect(data.message).toBe("User role updated successfully");
     });
 
-    it("should return 401 for non-superuser users", async () => {
+    it("should return 403 for non-superuser users", async () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock admin session (not superuser)
-      vi.mocked(getServerSession).mockResolvedValue({
+      vi.mocked(auth).mockResolvedValue({
         user: {
           id: "admin1",
           email: "admin@example.com",
           role: "admin", // Admin but not superuser
         },
+        expires: "2099-12-31T23:59:59.999Z",
       });
 
       const request = new NextRequest(
@@ -200,8 +186,8 @@ describe("Admin API Integration Tests", () => {
       const response = await UPDATE_USER_ROLE(request, { params });
       const data = await response.json();
 
-      expect(response.status).toBe(401);
-      expect(data.error).toBe("Unauthorized");
+      expect(response.status).toBe(403);
+      expect(data.error).toBe("Forbidden");
     });
 
     it("should prevent changing superuser role", async () => {
@@ -209,23 +195,24 @@ describe("Admin API Integration Tests", () => {
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock superuser session
-      vi.mocked(getServerSession).mockResolvedValue({
+      vi.mocked(auth).mockResolvedValue({
         user: {
           id: "super1",
           email: "sanjay@complyance.io", // Superuser email from requirements
           role: "superuser",
         },
+        expires: "2099-12-31T23:59:59.999Z",
       });
 
       // Mock user to update - this is the superuser
-      vi.mocked(User.findById).mockReturnValue({
-        exec: vi.fn().mockResolvedValue({
-          _id: "super1",
-          name: "Superuser",
-          email: "sanjay@complyance.io",
-          role: "superuser",
-        }),
-      } as any);
+      const superuserToUpdate = {
+        _id: "super1",
+        name: "Superuser",
+        email: "sanjay@complyance.io",
+        role: "superuser",
+        save: vi.fn().mockResolvedValue(undefined),
+      };
+      vi.mocked(User.findById).mockReturnValue(superuserToUpdate as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       const request = new NextRequest(
         "http://localhost:3000/api/admin/users/super1/role",
@@ -241,8 +228,8 @@ describe("Admin API Integration Tests", () => {
       const response = await UPDATE_USER_ROLE(request, { params });
       const data = await response.json();
 
-      expect(response.status).toBe(400);
-      expect(data.error).toBe("Cannot change superuser role");
+      expect(response.status).toBe(403);
+      expect(data.error).toBe("Cannot change role of initial superuser");
     });
   });
 });

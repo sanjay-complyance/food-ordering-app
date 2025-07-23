@@ -6,17 +6,35 @@ vi.mock("@/lib/mongodb", () => ({
   default: vi.fn(),
 }));
 
-vi.mock("@/models/Menu", () => ({
-  default: {
+// Mock Menu as a constructor with static methods (like Order in orders-api.test.ts)
+vi.mock("@/models/Menu", () => {
+  const MenuMock = vi.fn();
+  (MenuMock as any).find = vi.fn();
+  (MenuMock as any).findOne = vi.fn();
+  (MenuMock as any).create = vi.fn();
+  (MenuMock as any).findOneAndUpdate = vi.fn();
+  (MenuMock as any).findOneAndDelete = vi.fn();
+  (MenuMock as any).findByIdAndUpdate = vi.fn();
+  (MenuMock as any).findByIdAndDelete = vi.fn();
+  (MenuMock as any).updateMany = vi.fn();
+  return {
+    __esModule: true,
+    default: MenuMock,
+  };
+});
+
+vi.mock("@/models/MenuItem", () => ({
+  MenuItem: {
     find: vi.fn(),
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    findOneAndDelete: vi.fn(),
   },
 }));
 
 vi.mock("@/lib/auth", () => ({
+  auth: vi.fn(),
+  authOptions: {},
+}));
+
+vi.mock("next-auth/next", () => ({
   getServerSession: vi.fn(),
 }));
 
@@ -25,7 +43,7 @@ import { GET, POST, PUT, DELETE } from "@/app/api/menu/route";
 import { GET as GET_CURRENT } from "@/app/api/menu/current/route";
 import dbConnect from "@/lib/mongodb";
 import Menu from "@/models/Menu";
-import { getServerSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 
 describe("Menu API", () => {
   beforeEach(() => {
@@ -40,6 +58,15 @@ describe("Menu API", () => {
     it("should return menus successfully", async () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
+
+      // Mock session
+      vi.mocked(auth).mockResolvedValue({
+        user: {
+          id: "admin1",
+          email: "admin@example.com",
+          role: "admin",
+        },
+      });
 
       // Mock menu data
       const mockMenus = [
@@ -57,8 +84,8 @@ describe("Menu API", () => {
       ];
 
       vi.mocked(Menu.find).mockReturnValue({
-        sort: vi.fn().mockReturnValue({
-          exec: vi.fn().mockResolvedValue(mockMenus),
+        populate: vi.fn().mockReturnValue({
+          sort: vi.fn().mockReturnValue(mockMenus),
         }),
       } as any);
 
@@ -76,11 +103,17 @@ describe("Menu API", () => {
       vi.mocked(dbConnect).mockRejectedValue(
         new Error("Database connection failed")
       );
-
+      // Mock session
+      vi.mocked(auth).mockResolvedValue({
+        user: {
+          id: "admin1",
+          email: "admin@example.com",
+          role: "admin",
+        },
+      });
       const request = new NextRequest("http://localhost:3000/api/menu");
       const response = await GET(request);
       const data = await response.json();
-
       expect(response.status).toBe(500);
       expect(data.error).toBe("Internal server error");
     });
@@ -90,46 +123,67 @@ describe("Menu API", () => {
     it("should return current day menu", async () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
-
-      // Mock current menu
-      const today = new Date();
-      const mockMenu = {
-        _id: "menu1",
-        date: today,
-        items: [
-          { name: "Pasta", description: "Italian pasta", available: true },
-          { name: "Salad", description: "Fresh salad", available: true },
-        ],
-        createdBy: "user1",
-        createdAt: today,
-        updatedAt: today,
-      };
-
-      vi.mocked(Menu.findOne).mockReturnValue({
-        exec: vi.fn().mockResolvedValue(mockMenu),
+      // Mock getServerSession from next-auth/next
+      const { getServerSession } = await import("next-auth/next");
+      vi.mocked(getServerSession).mockResolvedValue({
+        user: {
+          id: "admin1",
+          email: "admin@example.com",
+          role: "admin",
+        },
+      });
+      // Mock session
+      vi.mocked(auth).mockResolvedValue({
+        user: {
+          id: "admin1",
+          email: "admin@example.com",
+          role: "admin",
+        },
+      });
+      // Mock MenuItem.find to return items with a sort method
+      const items = [
+        { name: "Pasta", description: "Italian pasta", available: true },
+        { name: "Salad", description: "Fresh salad", available: true },
+      ];
+      const { MenuItem } = await import("@/models/MenuItem");
+      vi.mocked(MenuItem.find).mockReturnValue({
+        sort: vi.fn().mockReturnValue(items),
       } as any);
-
       const request = new NextRequest("http://localhost:3000/api/menu/current");
       const response = await GET_CURRENT(request);
       const data = await response.json();
-
       expect(response.status).toBe(200);
-      expect(data.menu._id).toBe("menu1");
+      expect(data.menu._id).toBe("current-menu");
+      expect(data.menu.items).toHaveLength(2);
     });
-
     it("should return 404 when no menu exists for current day", async () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
-
-      // Mock no menu found
-      vi.mocked(Menu.findOne).mockReturnValue({
-        exec: vi.fn().mockResolvedValue(null),
+      // Mock getServerSession from next-auth/next
+      const { getServerSession } = await import("next-auth/next");
+      vi.mocked(getServerSession).mockResolvedValue({
+        user: {
+          id: "admin1",
+          email: "admin@example.com",
+          role: "admin",
+        },
+      });
+      // Mock session
+      vi.mocked(auth).mockResolvedValue({
+        user: {
+          id: "admin1",
+          email: "admin@example.com",
+          role: "admin",
+        },
+      });
+      // Mock MenuItem.find to return empty array with a sort method
+      const { MenuItem } = await import("@/models/MenuItem");
+      vi.mocked(MenuItem.find).mockReturnValue({
+        sort: vi.fn().mockReturnValue([]),
       } as any);
-
       const request = new NextRequest("http://localhost:3000/api/menu/current");
       const response = await GET_CURRENT(request);
       const data = await response.json();
-
       expect(response.status).toBe(404);
       expect(data.error).toBe("No menu found for today");
     });
@@ -139,77 +193,91 @@ describe("Menu API", () => {
     it("should create menu successfully as admin", async () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
-
       // Mock admin session
-      vi.mocked(getServerSession).mockResolvedValue({
+      vi.mocked(auth).mockResolvedValue({
         user: {
           id: "admin1",
           email: "admin@example.com",
           role: "admin",
         },
       });
-
-      // Mock menu creation
-      const mockCreatedMenu = {
-        _id: "newMenu1",
-        date: new Date("2025-07-22"),
-        items: [
-          { name: "Burger", description: "Beef burger", available: true },
-          { name: "Fries", description: "French fries", available: true },
-        ],
-        createdBy: "admin1",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      vi.mocked(Menu.create).mockResolvedValue(mockCreatedMenu as any);
-
+      // Patch the MenuMock constructor for this test
+      (Menu as any).mockImplementation(function (data: any) {
+        return {
+          ...data,
+          _id: "newMenu1",
+          name: "Lunch Menu",
+          description: "Tasty food",
+          date: new Date("2025-07-22"),
+          items: [
+            { name: "Burger", description: "Beef burger", available: true },
+            { name: "Fries", description: "French fries", available: true },
+          ],
+          createdBy: "admin1",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          save: vi.fn().mockResolvedValue(undefined),
+          populate: vi.fn().mockResolvedValue({
+            ...data,
+            _id: "newMenu1",
+            name: "Lunch Menu",
+            description: "Tasty food",
+            date: new Date("2025-07-22"),
+            items: [
+              { name: "Burger", description: "Beef burger", available: true },
+              { name: "Fries", description: "French fries", available: true },
+            ],
+            createdBy: "admin1",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }),
+        };
+      });
+      // Mock updateMany to resolve
+      (Menu as any).updateMany.mockResolvedValue(undefined);
+      // Mock findOne to resolve to null (no duplicate menu)
+      (Menu as any).findOne.mockResolvedValue(null);
       const request = new NextRequest("http://localhost:3000/api/menu", {
         method: "POST",
         body: JSON.stringify({
-          date: "2025-07-22",
+          name: "Lunch Menu",
+          description: "Tasty food",
           items: [
             { name: "Burger", description: "Beef burger", available: true },
             { name: "Fries", description: "French fries", available: true },
           ],
         }),
       });
-
       const response = await POST(request);
       const data = await response.json();
-
       expect(response.status).toBe(201);
-      expect(data.menu._id).toBe("newMenu1");
+      expect(data.data._id).toBe("newMenu1");
     });
-
     it("should return 401 for non-admin users", async () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
-
       // Mock regular user session
-      vi.mocked(getServerSession).mockResolvedValue({
+      vi.mocked(auth).mockResolvedValue({
         user: {
           id: "user1",
           email: "user@example.com",
           role: "user",
         },
       });
-
       const request = new NextRequest("http://localhost:3000/api/menu", {
         method: "POST",
         body: JSON.stringify({
-          date: "2025-07-22",
+          name: "Lunch Menu",
+          description: "Tasty food",
           items: [
             { name: "Burger", description: "Beef burger", available: true },
           ],
         }),
       });
-
       const response = await POST(request);
       const data = await response.json();
-
-      expect(response.status).toBe(401);
-      expect(data.error).toBe("Unauthorized");
+      expect(response.status).toBe(403);
+      expect(data.error).toBe("Insufficient permissions");
     });
   });
 
@@ -217,19 +285,19 @@ describe("Menu API", () => {
     it("should update menu successfully as admin", async () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
-
       // Mock admin session
-      vi.mocked(getServerSession).mockResolvedValue({
+      vi.mocked(auth).mockResolvedValue({
         user: {
           id: "admin1",
           email: "admin@example.com",
           role: "admin",
         },
       });
-
       // Mock menu update
       const mockUpdatedMenu = {
         _id: "menu1",
+        name: "Lunch Menu",
+        description: "Delicious options",
         date: new Date("2025-07-21"),
         items: [
           {
@@ -243,15 +311,15 @@ describe("Menu API", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-
-      vi.mocked(Menu.findOneAndUpdate).mockResolvedValue(
-        mockUpdatedMenu as any
-      );
-
+      vi.mocked(Menu.findByIdAndUpdate).mockReturnValue({
+        populate: vi.fn().mockResolvedValue(mockUpdatedMenu),
+      } as any);
       const request = new NextRequest("http://localhost:3000/api/menu", {
         method: "PUT",
         body: JSON.stringify({
-          id: "menu1",
+          _id: "menu1",
+          name: "Lunch Menu",
+          description: "Delicious options",
           items: [
             {
               name: "Updated Pasta",
@@ -262,13 +330,11 @@ describe("Menu API", () => {
           ],
         }),
       });
-
       const response = await PUT(request);
       const data = await response.json();
-
       expect(response.status).toBe(200);
-      expect(data.menu._id).toBe("menu1");
-      expect(data.menu.items[0].name).toBe("Updated Pasta");
+      expect(data.data._id).toBe("menu1");
+      expect(data.data.items[0].name).toBe("Updated Pasta");
     });
   });
 
@@ -278,7 +344,7 @@ describe("Menu API", () => {
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock admin session
-      vi.mocked(getServerSession).mockResolvedValue({
+      vi.mocked(auth).mockResolvedValue({
         user: {
           id: "admin1",
           email: "admin@example.com",
@@ -287,7 +353,7 @@ describe("Menu API", () => {
       });
 
       // Mock menu deletion
-      vi.mocked(Menu.findOneAndDelete).mockResolvedValue({
+      vi.mocked(Menu.findByIdAndDelete).mockResolvedValue({
         _id: "menu1",
         date: new Date("2025-07-21"),
       } as any);

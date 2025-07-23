@@ -78,18 +78,17 @@ describe("Database Models", () => {
   describe("Menu Model", () => {
     it("should create a menu successfully", async () => {
       const menuData = {
+        name: "Lunch Menu", // Add required name field
         date: new Date(),
         items: [
           { name: "Pasta", description: "Italian pasta", available: true },
-          { name: "Salad", description: "Fresh salad", available: true },
         ],
         createdBy: new mongoose.Types.ObjectId(),
       };
-
       const menu = await Menu.create(menuData);
       expect(menu).toBeDefined();
-      expect(menu.items).toHaveLength(2);
-      expect(menu.items[0].name).toBe("Pasta");
+      expect(menu.name).toBe(menuData.name);
+      expect(menu.items).toHaveLength(1);
     });
 
     it("should require date field", async () => {
@@ -119,14 +118,14 @@ describe("Database Models", () => {
       const orderData = {
         userId: new mongoose.Types.ObjectId(),
         orderDate: new Date(),
-        menuItemName: "Burger",
-        menuItemDescription: "Beef burger",
+        items: [
+          { name: "Burger", description: "Beef burger", quantity: 1 },
+        ], // Add non-empty items array
         status: "pending",
       };
-
       const order = await Order.create(orderData);
       expect(order).toBeDefined();
-      expect(order.menuItemName).toBe("Burger");
+      expect(order.items).toHaveLength(1);
       expect(order.status).toBe("pending");
     });
 
@@ -172,14 +171,13 @@ describe("Database Models", () => {
 
     it("should create a system notification without userId", async () => {
       const notificationData = {
-        type: "system",
+        type: "order_reminder", // Use a valid enum value
         message: "System maintenance scheduled",
         read: false,
       };
-
       const notification = await Notification.create(notificationData);
       expect(notification).toBeDefined();
-      expect(notification.type).toBe("system");
+      expect(notification.type).toBe("order_reminder");
       expect(notification.userId).toBeUndefined();
     });
 

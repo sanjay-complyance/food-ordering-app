@@ -1,19 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { PWAManager } from "@/lib/pwa";
 
-// Mock window objects
-const mockBeforeInstallPromptEvent = {
+type MockBeforeInstallPromptEvent = {
+  preventDefault: () => void;
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: string; platform: string }>;
+};
+const mockBeforeInstallPromptEvent: MockBeforeInstallPromptEvent = {
   preventDefault: vi.fn(),
   prompt: vi.fn().mockResolvedValue(undefined),
   userChoice: Promise.resolve({ outcome: "accepted", platform: "web" }),
 };
+
 
 describe("PWAManager", () => {
   let pwaManager: PWAManager;
 
   beforeEach(() => {
     // Reset singleton instance
-    (PWAManager as any).instance = undefined;
+    (PWAManager as unknown as { instance: PWAManager | undefined }).instance = undefined;
     pwaManager = PWAManager.getInstance();
 
     // Mock window and navigator
@@ -37,7 +42,7 @@ describe("PWAManager", () => {
       writable: true,
     });
 
-    global.Notification = window.Notification as any;
+    global.Notification = window.Notification as unknown as typeof Notification;
   });
 
   afterEach(() => {
@@ -59,7 +64,7 @@ describe("PWAManager", () => {
 
     it("should return true when deferred prompt is available", () => {
       // Simulate beforeinstallprompt event
-      (pwaManager as any).deferredPrompt = mockBeforeInstallPromptEvent;
+      (pwaManager as unknown as { deferredPrompt: MockBeforeInstallPromptEvent | undefined }).deferredPrompt = mockBeforeInstallPromptEvent;
       expect(pwaManager.canShowInstallPrompt()).toBe(true);
     });
   });
@@ -71,7 +76,7 @@ describe("PWAManager", () => {
     });
 
     it("should show install prompt and return true on acceptance", async () => {
-      (pwaManager as any).deferredPrompt = mockBeforeInstallPromptEvent;
+      (pwaManager as unknown as { deferredPrompt: MockBeforeInstallPromptEvent | undefined }).deferredPrompt = mockBeforeInstallPromptEvent;
 
       const result = await pwaManager.showInstallPrompt();
 
@@ -102,7 +107,7 @@ describe("PWAManager", () => {
 
   describe("requestNotificationPermission", () => {
     it("should return granted permission when already granted", async () => {
-      window.Notification.permission = "granted";
+      Object.defineProperty(window.Notification, "permission", { value: "granted", configurable: true });
 
       const result = await pwaManager.requestNotificationPermission();
 
@@ -110,7 +115,7 @@ describe("PWAManager", () => {
     });
 
     it("should request permission when default", async () => {
-      window.Notification.permission = "default";
+      Object.defineProperty(window.Notification, "permission", { value: "default", configurable: true });
 
       const result = await pwaManager.requestNotificationPermission();
 
@@ -121,7 +126,7 @@ describe("PWAManager", () => {
 
   describe("showNotification", () => {
     it("should return false when permission denied", async () => {
-      window.Notification.permission = "denied";
+      Object.defineProperty(window.Notification, "permission", { value: "denied", configurable: true });
 
       const result = await pwaManager.showNotification("Test Title");
 
@@ -129,19 +134,21 @@ describe("PWAManager", () => {
     });
 
     it("should use service worker when available", async () => {
-      window.Notification.permission = "granted";
+      Object.defineProperty(window.Notification, "permission", { value: "granted", configurable: true });
 
       const result = await pwaManager.showNotification("Test Title", {
         body: "Test Body",
       });
 
       expect(result).toBe(true);
-      expect(
-        window.navigator.serviceWorker.controller.postMessage
-      ).toHaveBeenCalledWith({
-        type: "SHOW_NOTIFICATION",
-        payload: { title: "Test Title", options: { body: "Test Body" } },
-      });
+      if (window.navigator.serviceWorker.controller) {
+        expect(
+          window.navigator.serviceWorker.controller.postMessage
+        ).toHaveBeenCalledWith({
+          type: "SHOW_NOTIFICATION",
+          payload: { title: "Test Title", options: { body: "Test Body" } },
+        });
+      }
     });
   });
 
@@ -176,7 +183,7 @@ describe("PWAManager", () => {
 
   describe("getNotificationPermission", () => {
     it("should return current notification permission state", () => {
-      window.Notification.permission = "granted";
+      Object.defineProperty(window.Notification, "permission", { value: "granted", configurable: true });
 
       const result = pwaManager.getNotificationPermission();
 

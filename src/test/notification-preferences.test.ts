@@ -71,6 +71,7 @@ describe("User Preferences API", () => {
           frequency: "all",
         },
       }),
+      save: vi.fn().mockResolvedValue(undefined),
     };
 
     // Setup mocks

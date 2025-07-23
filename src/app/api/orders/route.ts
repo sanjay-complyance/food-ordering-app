@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import getServerSession, { authOptions } from "@/lib/auth";
 import connectToDatabase from "@/lib/mongodb";
 import Order from "@/models/Order";
 import User from "@/models/User";
@@ -181,11 +180,17 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session?.user?.email) {
       return NextResponse.json(
         { error: "Authentication required" },
         { status: 401 }
+      );
+    }
+    const user = await User.findOne({ email: session.user.email }).exec();
+    if (!user) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
       );
     }
 
@@ -206,8 +211,7 @@ export async function PUT(request: NextRequest) {
       // Handle status-only update
       await connectToDatabase();
 
-      // Find user by email
-      const user = await User.findOne({ email: session.user.email });
+      // Use user already declared at the top
       if (!user) {
         return NextResponse.json(
           { error: "User not found" },
@@ -270,15 +274,6 @@ export async function PUT(request: NextRequest) {
     }
 
     await connectToDatabase();
-
-    // Find user by email
-    const user = await User.findOne({ email: session.user.email });
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
-    }
 
     // Find existing order
     const existingOrder = await Order.findById(orderId).populate(

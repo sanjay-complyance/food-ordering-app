@@ -105,27 +105,28 @@ describe("NotificationPreferences", () => {
 
     // Wait for preferences to load
     await waitFor(() => {
-      expect(screen.getByTestId("card-title")).toHaveTextContent(
-        "Notification Preferences"
-      );
+      expect(
+        screen.getAllByTestId("card-title")[0].textContent
+      ).toContain("Notification Preferences");
     });
 
     // Check if all preference options are rendered
-    expect(screen.getByText(/Order Reminders/i)).toBeInTheDocument();
-    expect(screen.getByText(/Order Confirmations/i)).toBeInTheDocument();
-    expect(screen.getByText(/Order Modifications/i)).toBeInTheDocument();
-    expect(screen.getByText(/Menu Updates/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Delivery Method/i)[0]).toBeInTheDocument();
-    expect(
-      screen.getAllByText(/Notification Frequency/i)[0]
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Order Reminders/i)).toBeTruthy();
+    expect(screen.getByText(/Order Confirmations/i)).toBeTruthy();
+    expect(screen.getByText(/Order Modifications/i)).toBeTruthy();
+    expect(screen.getByText(/Menu Updates/i)).toBeTruthy();
+    expect(screen.getAllByText(/Delivery Method/i)[0]).toBeTruthy();
+    expect(screen.getAllByText(/Notification Frequency/i)[0]).toBeTruthy();
   });
 
   it("should show loading state initially", () => {
     render(<NotificationPreferences />);
-    expect(screen.getByTestId("card-description")).toHaveTextContent(
-      "Loading preferences..."
-    );
+    const descriptions = screen.getAllByTestId("card-description");
+    expect(
+      descriptions.some((el) =>
+        el.textContent?.includes("Loading preferences...")
+      )
+    ).toBe(true);
   });
 
   it("should fetch preferences on load", async () => {
@@ -158,19 +159,19 @@ describe("NotificationPreferences", () => {
 
     // Wait for preferences to load
     await waitFor(() => {
-      expect(screen.getByTestId("card-title")).toHaveTextContent(
-        "Notification Preferences"
-      );
+      expect(
+        screen.getAllByTestId("card-title")[0].textContent
+      ).toContain("Notification Preferences");
     });
 
     // Toggle order reminders switch
-    const orderRemindersSwitch = screen.getByLabelText("Order Reminders");
+    const orderRemindersSwitch = screen.getAllByLabelText("Order Reminders")[0];
     fireEvent.click(orderRemindersSwitch);
 
     // Submit form
-    const saveButton = screen.getByRole("button", {
+    const saveButton = screen.getAllByRole("button", {
       name: /Save Preferences/i,
-    });
+    })[0];
     fireEvent.click(saveButton);
 
     // Verify API call
@@ -203,15 +204,15 @@ describe("NotificationPreferences", () => {
 
     // Wait for preferences to load
     await waitFor(() => {
-      expect(screen.getByTestId("card-title")).toHaveTextContent(
-        "Notification Preferences"
-      );
+      expect(
+        screen.getAllByTestId("card-title")[0].textContent
+      ).toContain("Notification Preferences");
     });
 
     // Submit form
-    const saveButton = screen.getByRole("button", {
+    const saveButton = screen.getAllByRole("button", {
       name: /Save Preferences/i,
-    });
+    })[0];
     fireEvent.click(saveButton);
 
     // Verify API call
