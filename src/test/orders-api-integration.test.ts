@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { Types } from "mongoose";
+import type { Mock } from 'vitest';
 
 // Mock dependencies
 vi.mock("@/lib/mongodb", () => ({
@@ -61,10 +62,9 @@ vi.mock("@/models/User", () => ({
 }));
 
 vi.mock("@/lib/auth", () => ({
-  default: vi.fn(),
+  __esModule: true,
   getServerSession: vi.fn(),
   authOptions: {},
-  auth: vi.fn(),
 }));
 
 vi.mock('next-auth', () => ({
@@ -80,11 +80,16 @@ import Order from "@/models/Order";
 import Menu from "@/models/Menu";
 import Notification from "@/models/Notification";
 import User from "@/models/User";
-import getServerSession from "@/lib/auth";
+import { getServerSession } from "@/lib/auth";
 
 describe("Orders API Integration Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: authenticated session
+    (getServerSession as unknown as Mock).mockResolvedValue({
+      user: { id: "user1", email: "user@example.com", role: "user" },
+      expires: "2099-12-31T23:59:59.999Z",
+    });
   });
 
   afterEach(() => {
@@ -93,11 +98,8 @@ describe("Orders API Integration Tests", () => {
 
   describe("GET /api/orders", () => {
     it("should return user orders when authenticated", async () => {
-      // Mock database connection
-      vi.mocked(dbConnect).mockResolvedValue(undefined);
-
       // Mock user session
-      vi.mocked(getServerSession).mockResolvedValue({
+      (getServerSession as unknown as Mock).mockResolvedValue({
         user: {
           id: "user1",
           email: "user@example.com",
@@ -165,16 +167,9 @@ describe("Orders API Integration Tests", () => {
     });
 
     it("should return all orders for admin users", async () => {
-      // Mock database connection
-      vi.mocked(dbConnect).mockResolvedValue(undefined);
-
-      // Mock admin session
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "admin1",
-          email: "admin@example.com",
-          role: "admin",
-        },
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "admin1", email: "admin@example.com", role: "admin" },
+        expires: "2099-12-31T23:59:59.999Z",
       });
       // Mock admin user lookup
       vi.mocked(User.findOne).mockResolvedValue({
@@ -239,11 +234,7 @@ describe("Orders API Integration Tests", () => {
     });
 
     it("should return 401 when not authenticated", async () => {
-      // Mock database connection
-      vi.mocked(dbConnect).mockResolvedValue(undefined);
-
-      // Mock no session
-      vi.mocked(getServerSession).mockResolvedValue(null);
+      (getServerSession as unknown as Mock).mockResolvedValue(null);
       // Mock user lookup to return null
       vi.mocked(User.findOne).mockResolvedValue(null);
 
@@ -258,17 +249,6 @@ describe("Orders API Integration Tests", () => {
 
   describe("POST /api/orders", () => {
     it("should create a new order when authenticated", async () => {
-      // Mock database connection
-      vi.mocked(dbConnect).mockResolvedValue(undefined);
-
-      // Mock user session
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "user1",
-          email: "user@example.com",
-          role: "user",
-        },
-      });
       // Mock User.findOne to return a user
       // @ts-expect-error: Mongoose Query mock does not fully match type
       vi.mocked(User.findOne).mockReturnValue({
@@ -344,26 +324,11 @@ describe("Orders API Integration Tests", () => {
     });
 
     it("should update existing order when one exists for the day", async () => {
-      // Mock database connection
-      vi.mocked(dbConnect).mockResolvedValue(undefined);
-
-      // Mock user session
-      const userIdMock = { toString: () => 'user1' };
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "user1",
-          _id: userIdMock,
-          email: "user@example.com",
-          role: "user",
-        },
-        expires: "2099-12-31T23:59:59.999Z",
-      });
-
       // Mock User.findOne to return a user
       // @ts-expect-error: Mongoose Query mock does not fully match type
       vi.mocked(User.findOne).mockReturnValue({
         exec: vi.fn().mockResolvedValue({
-          _id: userIdMock,
+          _id: "user1",
           email: "user@example.com",
           role: "user",
         }),
@@ -481,17 +446,8 @@ describe("Orders API Integration Tests", () => {
 
   describe("PUT /api/orders/[id]/status", () => {
     it("should update order status for admin users", async () => {
-      // Mock database connection
-      vi.mocked(dbConnect).mockResolvedValue(undefined);
-
-      // Mock admin session for getServerSession
-      const { getServerSession } = await import('next-auth');
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "admin1",
-          email: "admin@example.com",
-          role: "admin",
-        },
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "admin1", email: "admin@example.com", role: "admin" },
         expires: "2099-12-31T23:59:59.999Z",
       });
       // Mock admin user lookup
@@ -555,18 +511,9 @@ describe("Orders API Integration Tests", () => {
       expect(data.data.status).toBe("confirmed");
     });
 
-    it("should return 401 for non-admin users", async () => {
-      // Mock database connection
-      vi.mocked(dbConnect).mockResolvedValue(undefined);
-
-      // Mock non-admin session for getServerSession
-      const { getServerSession } = await import('next-auth');
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "user1",
-          email: "user@example.com",
-          role: "user",
-        },
+    it("should return 403 for non-admin users", async () => {
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "user1", email: "user@example.com", role: "user" },
         expires: "2099-12-31T23:59:59.999Z",
       });
       // Mock user lookup
@@ -617,17 +564,8 @@ describe("Orders API Integration Tests", () => {
 
   describe("POST /api/admin/orders/process", () => {
     it("should process all pending orders for admin users", async () => {
-      // Mock database connection
-      vi.mocked(dbConnect).mockResolvedValue(undefined);
-
-      // Mock admin session for 'auth'
-      const { auth } = await import("@/lib/auth");
-      vi.mocked(auth).mockResolvedValue({
-        user: {
-          id: "admin1",
-          email: "admin@example.com",
-          role: "admin",
-        },
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "admin1", email: "admin@example.com", role: "admin" },
         expires: "2099-12-31T23:59:59.999Z",
       });
 
@@ -722,16 +660,9 @@ describe("Orders API Integration Tests", () => {
     });
 
     it("should return 401 for non-admin users", async () => {
-      // Mock database connection
-      vi.mocked(dbConnect).mockResolvedValue(undefined);
-
-      // Mock regular user session
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "user1",
-          email: "user@example.com",
-          role: "user",
-        },
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "user1", email: "user@example.com", role: "user" },
+        expires: "2099-12-31T23:59:59.999Z",
       });
       // Mock user lookup
       vi.mocked(User.findOne).mockResolvedValue({
@@ -751,8 +682,8 @@ describe("Orders API Integration Tests", () => {
       const response = await PROCESS_ORDERS(request);
       const data = await response.json();
 
-      expect(response.status).toBe(401);
-      expect(data.error).toBe("Unauthorized");
+      expect(response.status).toBe(403);
+      expect(data.error).toBe("Forbidden");
     });
   });
 });

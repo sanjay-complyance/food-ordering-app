@@ -1,7 +1,25 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, APIRequestContext } from "@playwright/test";
+
+// Helper to create a user via the signup API
+async function ensureUserExists(apiRequest: APIRequestContext, { name, email, password }: { name: string; email: string; password: string }) {
+  const response = await apiRequest.post("/api/auth/signup", {
+    data: { name, email, password },
+  });
+  // 201 = created, 409 = already exists
+  if (![201, 409].includes(response.status())) {
+    throw new Error(`Failed to create user: ${email} (${response.status()})`);
+  }
+}
 
 test.describe("Menu and Ordering Flow", () => {
-  // Setup: Log in before each test
+  test.beforeAll(async ({ request: apiRequest }) => {
+    await ensureUserExists(apiRequest, {
+      name: "Menu Test User",
+      email: "menu-test-user@example.com",
+      password: "password123",
+    });
+  });
+
   test.beforeEach(async ({ page }) => {
     // Create and log in as a test user
     const testEmail = "menu-test-user@example.com";
@@ -17,7 +35,7 @@ test.describe("Menu and Ordering Flow", () => {
     // Either we'll be redirected to dashboard or get an error if user exists
     try {
       await page.waitForURL("/", { timeout: 5000 });
-    } catch (e) {
+    } catch {
       // User might already exist, log in instead
       await page.goto("/auth/login");
       await page.fill('input[name="email"]', testEmail);

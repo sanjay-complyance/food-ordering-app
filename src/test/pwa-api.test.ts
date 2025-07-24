@@ -7,9 +7,10 @@ vi.mock("next-auth", () => ({
 }));
 vi.mock("@/lib/auth", () => ({
   authOptions: {},
+  getServerSession: vi.fn(),
 }));
 
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 
 // Import the API handlers after mocks
 import * as pwaApi from "@/app/api/pwa/notifications/route";
@@ -26,7 +27,7 @@ describe("/api/pwa/notifications API", () => {
 
   describe("POST", () => {
     it("should return 401 if not authenticated", async () => {
-      (getServerSession as any).mockResolvedValue(null);
+      getServerSession.mockResolvedValue(null);
       const req = new NextRequest("http://localhost/api/pwa/notifications", { method: "POST", body: JSON.stringify({ title: "Test" }) });
       const res = await pwaApi.POST(req);
       const data = await res.json();
@@ -35,7 +36,7 @@ describe("/api/pwa/notifications API", () => {
     });
 
     it("should return 400 if title is missing", async () => {
-      (getServerSession as any).mockResolvedValue({ user: { id: "user1" } });
+      getServerSession.mockResolvedValue({ user: { id: "user1" } });
       const req = new NextRequest("http://localhost/api/pwa/notifications", { method: "POST", body: JSON.stringify({ body: "No title" }) });
       const res = await pwaApi.POST(req);
       const data = await res.json();
@@ -44,7 +45,7 @@ describe("/api/pwa/notifications API", () => {
     });
 
     it("should return success and notification payload", async () => {
-      (getServerSession as any).mockResolvedValue({ user: { id: "user1" } });
+      getServerSession.mockResolvedValue({ user: { id: "user1" } });
       const req = new NextRequest("http://localhost/api/pwa/notifications", { method: "POST", body: JSON.stringify({ title: "Test", body: "Body" }) });
       const res = await pwaApi.POST(req);
       const data = await res.json();
@@ -55,7 +56,7 @@ describe("/api/pwa/notifications API", () => {
     });
 
     it("should handle server error", async () => {
-      (getServerSession as any).mockImplementation(() => { throw new Error("fail"); });
+      getServerSession.mockImplementation(() => { throw new Error("fail"); });
       const req = new NextRequest("http://localhost/api/pwa/notifications", { method: "POST", body: JSON.stringify({ title: "Test" }) });
       const res = await pwaApi.POST(req);
       const data = await res.json();
@@ -66,7 +67,7 @@ describe("/api/pwa/notifications API", () => {
 
   describe("GET", () => {
     it("should return 401 if not authenticated", async () => {
-      (getServerSession as any).mockResolvedValue(null);
+      getServerSession.mockResolvedValue(null);
       const req = new NextRequest("http://localhost/api/pwa/notifications");
       const res = await pwaApi.GET(req);
       const data = await res.json();
@@ -75,7 +76,7 @@ describe("/api/pwa/notifications API", () => {
     });
 
     it("should return config and capabilities", async () => {
-      (getServerSession as any).mockResolvedValue({ user: { id: "user1" } });
+      getServerSession.mockResolvedValue({ user: { id: "user1" } });
       const req = new NextRequest("http://localhost/api/pwa/notifications");
       const res = await pwaApi.GET(req);
       const data = await res.json();
@@ -86,7 +87,7 @@ describe("/api/pwa/notifications API", () => {
     });
 
     it("should handle server error", async () => {
-      (getServerSession as any).mockImplementation(() => { throw new Error("fail"); });
+      getServerSession.mockImplementation(() => { throw new Error("fail"); });
       const req = new NextRequest("http://localhost/api/pwa/notifications");
       const res = await pwaApi.GET(req);
       const data = await res.json();

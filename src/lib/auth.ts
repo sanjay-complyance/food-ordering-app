@@ -77,3 +77,5 @@ export default NextAuthHandler;
 
 // Export auth function for API routes
 export const auth = () => getServerSession(authOptions);
+
+export { getServerSession };

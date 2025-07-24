@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import type { Mock } from 'vitest';
 
 // Mock dependencies
 vi.mock("@/lib/mongodb", () => ({
@@ -32,9 +33,10 @@ vi.mock("@/models/Notification", () => ({
 }));
 
 vi.mock("@/lib/auth", () => ({
-  default: vi.fn(),
-  auth: vi.fn(),
+  __esModule: true,
   getServerSession: vi.fn(),
+  authOptions: {},
+  auth: vi.fn(),
 }));
 
 vi.mock("@/lib/notifications", () => ({
@@ -49,12 +51,17 @@ import { POST as POST_PROCESS_ORDERS } from "@/app/api/admin/orders/process/rout
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 import Order from "@/models/Order";
-import getServerSession, { auth } from "@/lib/auth";
+import { getServerSession, auth } from "@/lib/auth";
 import { sendBulkNotifications } from "@/lib/notifications";
 
 describe("Admin API Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: authenticated admin session
+    (getServerSession as unknown as Mock).mockResolvedValue({
+      user: { id: "admin1", email: "admin@example.com", role: "admin" },
+      expires: "2099-12-31T23:59:59.999Z",
+    });
   });
 
   afterEach(() => {
@@ -64,19 +71,12 @@ describe("Admin API Routes", () => {
   describe("User Management API", () => {
     describe("GET /api/admin/users", () => {
       it("should return users list for superuser", async () => {
+        (getServerSession as unknown as Mock).mockResolvedValue({
+          user: { id: "superuser1", email: "superuser@example.com", role: "superuser" },
+          expires: "2099-12-31T23:59:59.999Z",
+        });
         // Mock database connection
         vi.mocked(dbConnect).mockResolvedValue(undefined);
-
-        // Mock superuser session
-        const sessionObj = {
-          user: {
-            id: "superuser1",
-            email: "superuser@example.com",
-            role: "superuser",
-          },
-          expires: "2099-12-31T23:59:59.999Z",
-        };
-        vi.mocked(auth).mockResolvedValue(sessionObj);
 
         // Mock users data
         const mockUsers = [
@@ -135,15 +135,10 @@ describe("Admin API Routes", () => {
         vi.mocked(dbConnect).mockResolvedValue(undefined);
 
         // Mock admin session (not superuser)
-        const sessionObj2 = {
-          user: {
-            id: "admin1",
-            email: "admin@example.com",
-            role: "admin",
-          },
+        (getServerSession as unknown as Mock).mockResolvedValue({
+          user: { id: "admin1", email: "admin@example.com", role: "admin" },
           expires: "2099-12-31T23:59:59.999Z",
-        };
-        vi.mocked(auth).mockResolvedValue(sessionObj2);
+        });
 
         const request = new NextRequest(
           "http://localhost:3000/api/admin/users"
@@ -154,6 +149,21 @@ describe("Admin API Routes", () => {
         expect(response.status).toBe(403);
         expect(data.error).toBe("Forbidden");
       });
+
+      it("should return 401 for unauthenticated users", async () => {
+        (getServerSession as unknown as Mock).mockResolvedValue(null);
+        // Mock database connection
+        vi.mocked(dbConnect).mockResolvedValue(undefined);
+
+        const request = new NextRequest(
+          "http://localhost:3000/api/admin/users"
+        );
+        const response = await GET_ADMIN_USERS(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(401);
+        expect(data.error).toBe("Unauthorized");
+      });
     });
 
     describe("PUT /api/admin/users/[id]/role", () => {
@@ -162,15 +172,10 @@ describe("Admin API Routes", () => {
         vi.mocked(dbConnect).mockResolvedValue(undefined);
 
         // Mock superuser session
-        const sessionObj3 = {
-          user: {
-            id: "superuser1",
-            email: "superuser@example.com",
-            role: "superuser",
-          },
+        (getServerSession as unknown as Mock).mockResolvedValue({
+          user: { id: "superuser1", email: "superuser@example.com", role: "superuser" },
           expires: "2099-12-31T23:59:59.999Z",
-        };
-        vi.mocked(auth).mockResolvedValue(sessionObj3);
+        });
 
         // Mock user to update (findById)
         const mockUserToUpdate = {
@@ -239,15 +244,10 @@ describe("Admin API Routes", () => {
         vi.mocked(dbConnect).mockResolvedValue(undefined);
 
         // Mock admin session (not superuser)
-        const sessionObj4 = {
-          user: {
-            id: "admin1",
-            email: "admin@example.com",
-            role: "admin",
-          },
+        (getServerSession as unknown as Mock).mockResolvedValue({
+          user: { id: "admin1", email: "admin@example.com", role: "admin" },
           expires: "2099-12-31T23:59:59.999Z",
-        };
-        vi.mocked(auth).mockResolvedValue(sessionObj4);
+        });
 
         const request = new NextRequest(
           "http://localhost:3000/api/admin/users/user1/role",
@@ -266,26 +266,41 @@ describe("Admin API Routes", () => {
         expect(response.status).toBe(403);
         expect(data.error).toBe("Forbidden");
       });
+
+      it("should return 401 for unauthenticated users", async () => {
+        (getServerSession as unknown as Mock).mockResolvedValue(null);
+        // Mock database connection
+        vi.mocked(dbConnect).mockResolvedValue(undefined);
+
+        const request = new NextRequest(
+          "http://localhost:3000/api/admin/users/user1/role",
+          {
+            method: "PUT",
+            body: JSON.stringify({ role: "admin" }),
+          }
+        );
+
+        // Mock params
+        const params = { id: "user1" };
+
+        const response = await PUT_USER_ROLE(request, { params });
+        const data = await response.json();
+
+        expect(response.status).toBe(401);
+        expect(data.error).toBe("Unauthorized");
+      });
     });
   });
 
   describe("Order Management API", () => {
     describe("GET /api/admin/orders", () => {
       it("should return orders for admin", async () => {
+        (getServerSession as unknown as Mock).mockResolvedValue({
+          user: { id: "admin1", email: "admin@example.com", role: "admin" },
+          expires: "2099-12-31T23:59:59.999Z",
+        });
         // Mock database connection
         vi.mocked(dbConnect).mockResolvedValue(undefined);
-
-        // Mock admin session
-        const sessionObj5 = {
-          user: {
-            id: "admin1",
-            email: "admin@example.com",
-            role: "admin",
-          },
-          expires: "2099-12-31T23:59:59.999Z",
-        };
-        vi.mocked(auth).mockResolvedValue(sessionObj5);
-        vi.mocked(getServerSession).mockResolvedValue(sessionObj5);
 
         // Mock orders data
         vi.mocked(Order.find).mockReturnValue({
@@ -311,16 +326,18 @@ describe("Admin API Routes", () => {
         vi.mocked(dbConnect).mockResolvedValue(undefined);
 
         // Mock regular user session
-        const sessionObj6 = {
+        (getServerSession as unknown as Mock).mockResolvedValue({
+          user: { id: "user1", email: "user@example.com", role: "user" },
+          expires: "2099-12-31T23:59:59.999Z",
+        });
+        (getServerSession as unknown as Mock).mockResolvedValue({
           user: {
             id: "user1",
             email: "user@example.com",
             role: "user",
           },
           expires: "2099-12-31T23:59:59.999Z",
-        };
-        vi.mocked(auth).mockResolvedValue(sessionObj6);
-        vi.mocked(getServerSession).mockResolvedValue(sessionObj6);
+        });
 
         const request = new NextRequest(
           "http://localhost:3000/api/admin/orders"
@@ -331,6 +348,21 @@ describe("Admin API Routes", () => {
         expect(response.status).toBe(403);
         expect(data.error).toBe("Forbidden");
       });
+
+      it("should return 401 for unauthenticated users", async () => {
+        (getServerSession as unknown as Mock).mockResolvedValue(null);
+        // Mock database connection
+        vi.mocked(dbConnect).mockResolvedValue(undefined);
+
+        const request = new NextRequest(
+          "http://localhost:3000/api/admin/orders"
+        );
+        const response = await GET_ADMIN_ORDERS(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(401);
+        expect(data.error).toBe("Unauthorized");
+      });
     });
 
     describe("POST /api/admin/orders/process", () => {
@@ -339,15 +371,10 @@ describe("Admin API Routes", () => {
         vi.mocked(dbConnect).mockResolvedValue(undefined);
 
         // Mock admin session
-        const sessionObj7 = {
-          user: {
-            id: "admin1",
-            email: "admin@example.com",
-            role: "admin",
-          },
+        (getServerSession as unknown as Mock).mockResolvedValue({
+          user: { id: "admin1", email: "admin@example.com", role: "admin" },
           expires: "2099-12-31T23:59:59.999Z",
-        };
-        vi.mocked(auth).mockResolvedValue(sessionObj7);
+        });
         // Mock sendBulkNotifications
         vi.mocked(sendBulkNotifications).mockResolvedValue({ count: 2, notifications: [] });
 
@@ -385,15 +412,10 @@ describe("Admin API Routes", () => {
         vi.mocked(dbConnect).mockResolvedValue(undefined);
 
         // Mock regular user session
-        const sessionObj8 = {
-          user: {
-            id: "user1",
-            email: "user@example.com",
-            role: "user",
-          },
+        (getServerSession as unknown as Mock).mockResolvedValue({
+          user: { id: "user1", email: "user@example.com", role: "user" },
           expires: "2099-12-31T23:59:59.999Z",
-        };
-        vi.mocked(auth).mockResolvedValue(sessionObj8);
+        });
 
         const request = new NextRequest(
           "http://localhost:3000/api/admin/orders/process",
@@ -408,6 +430,26 @@ describe("Admin API Routes", () => {
 
         expect(response.status).toBe(403);
         expect(data.error).toBe("Forbidden");
+      });
+
+      it("should return 401 for unauthenticated users", async () => {
+        (getServerSession as unknown as Mock).mockResolvedValue(null);
+        // Mock database connection
+        vi.mocked(dbConnect).mockResolvedValue(undefined);
+
+        const request = new NextRequest(
+          "http://localhost:3000/api/admin/orders/process",
+          {
+            method: "POST",
+            body: JSON.stringify({ date: "2025-07-21" }),
+          }
+        );
+
+        const response = await POST_PROCESS_ORDERS(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(401);
+        expect(data.error).toBe("Unauthorized");
       });
     });
   });

@@ -1,7 +1,25 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, APIRequestContext } from "@playwright/test";
+
+// Helper to create a user via the signup API
+async function ensureUserExists(apiRequest: APIRequestContext, { name, email, password }: { name: string; email: string; password: string }) {
+  const response = await apiRequest.post("/api/auth/signup", {
+    data: { name, email, password },
+  });
+  // 201 = created, 409 = already exists
+  if (![201, 409].includes(response.status())) {
+    throw new Error(`Failed to create user: ${email} (${response.status()})`);
+  }
+}
 
 test.describe("Admin Workflow", () => {
-  // Setup: Log in as admin before each test
+  test.beforeAll(async ({ request: apiRequest }) => {
+    await ensureUserExists(apiRequest, {
+      name: "Admin User",
+      email: "admin@example.com",
+      password: "adminpassword",
+    });
+  });
+
   test.beforeEach(async ({ page }) => {
     // Log in as admin
     await page.goto("/auth/login");
@@ -12,7 +30,7 @@ test.describe("Admin Workflow", () => {
     // Wait for redirect to dashboard
     try {
       await page.waitForURL("/", { timeout: 5000 });
-    } catch (e) {
+    } catch {
       // If login fails, try to create admin account first
       await page.goto("/auth/signup");
       await page.fill('input[name="name"]', "Admin User");

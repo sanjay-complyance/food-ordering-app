@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import type { Mock } from 'vitest';
 
 // Mock dependencies
 vi.mock("@/lib/mongodb", () => ({
@@ -16,7 +17,10 @@ vi.mock("@/models/User", () => ({
 }));
 
 vi.mock("@/lib/auth", () => ({
-  auth: vi.fn(),
+  __esModule: true,
+  default: vi.fn(),
+  getServerSession: vi.fn(),
+  authOptions: {},
 }));
 
 // Import after mocking
@@ -24,7 +28,7 @@ import { GET as GET_USERS } from "@/app/api/admin/users/route";
 import { PUT as UPDATE_USER_ROLE } from "@/app/api/admin/users/[id]/role/route";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth";
 
 describe("Admin API Integration Tests", () => {
   beforeEach(() => {
@@ -42,12 +46,8 @@ describe("Admin API Integration Tests", () => {
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock superuser session
-      vi.mocked(auth).mockResolvedValue({
-        user: {
-          id: "super1",
-          email: "sanjay@complyance.io", // Superuser email from requirements
-          role: "superuser",
-        },
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "super1", email: "sanjay@complyance.io", role: "superuser" },
         expires: "2099-12-31T23:59:59.999Z",
       });
 
@@ -93,12 +93,8 @@ describe("Admin API Integration Tests", () => {
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock admin session (not superuser)
-      vi.mocked(auth).mockResolvedValue({
-        user: {
-          id: "admin1",
-          email: "admin@example.com",
-          role: "admin", // Admin but not superuser
-        },
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "admin1", email: "admin@example.com", role: "admin" },
         expires: "2099-12-31T23:59:59.999Z",
       });
 
@@ -117,12 +113,8 @@ describe("Admin API Integration Tests", () => {
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock superuser session
-      vi.mocked(auth).mockResolvedValue({
-        user: {
-          id: "super1",
-          email: "sanjay@complyance.io", // Superuser email from requirements
-          role: "superuser",
-        },
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "super1", email: "sanjay@complyance.io", role: "superuser" },
         expires: "2099-12-31T23:59:59.999Z",
       });
 
@@ -163,12 +155,8 @@ describe("Admin API Integration Tests", () => {
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock admin session (not superuser)
-      vi.mocked(auth).mockResolvedValue({
-        user: {
-          id: "admin1",
-          email: "admin@example.com",
-          role: "admin", // Admin but not superuser
-        },
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "admin1", email: "admin@example.com", role: "admin" },
         expires: "2099-12-31T23:59:59.999Z",
       });
 
@@ -195,12 +183,8 @@ describe("Admin API Integration Tests", () => {
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock superuser session
-      vi.mocked(auth).mockResolvedValue({
-        user: {
-          id: "super1",
-          email: "sanjay@complyance.io", // Superuser email from requirements
-          role: "superuser",
-        },
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "super1", email: "sanjay@complyance.io", role: "superuser" },
         expires: "2099-12-31T23:59:59.999Z",
       });
 

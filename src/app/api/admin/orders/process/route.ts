@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getServerSession, authOptions } from '@/lib/auth';
 import dbConnect from "@/lib/mongodb";
 import Order from "@/models/Order";
 import { sendBulkNotifications } from "@/lib/notifications";
@@ -8,7 +8,7 @@ import { sendBulkNotifications } from "@/lib/notifications";
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const session = await auth();
+    const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

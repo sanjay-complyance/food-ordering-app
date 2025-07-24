@@ -1,16 +1,21 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
 const mongoose = require('mongoose');
 
-// Define the Menu schema (updated version)
+// Define the MenuItem schema (shared for Menu and MenuItem)
 const menuItemSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String, required: true },
   price: { type: Number },
-  available: { type: Boolean, default: true }
+  available: { type: Boolean, default: true },
+  createdBy: { type: String }, // Only required for MenuItem collection
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 }, { _id: false });
 
 const menuSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String },
+  date: { type: Date, required: true },
   items: [menuItemSchema],
   isActive: { type: Boolean, default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -19,6 +24,7 @@ const menuSchema = new mongoose.Schema({
 });
 
 const Menu = mongoose.model('Menu', menuSchema);
+const MenuItem = mongoose.models.MenuItem || mongoose.model('MenuItem', menuItemSchema);
 
 async function seedMenu() {
   try {
@@ -27,10 +33,15 @@ async function seedMenu() {
     await mongoose.connect(mongoUri);
     console.log('Connected to MongoDB');
 
+    // Today's date (set to midnight)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     // Sample menu data
     const sampleMenu = {
       name: "Daily Lunch Menu",
       description: "Our current selection of delicious lunch options",
+      date: today, // Add date field for today
       items: [
         {
           name: "Grilled Chicken Salad",
@@ -77,20 +88,32 @@ async function seedMenu() {
     await Menu.updateMany({}, { isActive: false });
     console.log('Deactivated existing menus');
 
-    // Check if menu already exists
-    const existingMenu = await Menu.findOne({ name: sampleMenu.name });
-    
+    // Check if menu for today already exists
+    const existingMenu = await Menu.findOne({ date: today });
     if (existingMenu) {
-      console.log('Menu already exists, updating...');
+      console.log('Menu for today already exists, updating...');
       await Menu.findOneAndUpdate(
-        { name: sampleMenu.name }, 
-        { ...sampleMenu, isActive: true }, 
+        { date: today },
+        { ...sampleMenu, isActive: true },
         { new: true }
       );
     } else {
-      console.log('Creating new menu...');
+      console.log('Creating new menu for today...');
       await Menu.create(sampleMenu);
     }
+
+    // Seed MenuItem collection for /api/menu/current
+    await MenuItem.deleteMany({});
+    const menuItemDocs = sampleMenu.items.map(item => ({
+      name: item.name,
+      description: item.description,
+      available: item.available,
+      createdBy: 'seed-script',
+      createdAt: today,
+      updatedAt: today
+    }));
+    await MenuItem.insertMany(menuItemDocs);
+    console.log('Seeded MenuItem collection for /api/menu/current');
 
     console.log('Menu seeded successfully!');
     console.log('Current menu items:');

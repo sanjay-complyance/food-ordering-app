@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import type { Mock } from 'vitest';
 
 // Use vi.fn() so we can use .mockImplementation
 // const OrderMock = vi.fn(); // This line is removed as OrderMock is now defined inside the mock factory
@@ -40,7 +41,7 @@ vi.mock("@/models/Notification", () => ({
 
 vi.mock("@/lib/auth", () => ({
   __esModule: true,
-  default: vi.fn(),
+  getServerSession: vi.fn(),
   authOptions: {},
 }));
 
@@ -63,7 +64,7 @@ import { GET as GET_ADMIN } from "@/app/api/admin/orders/route";
 import dbConnect from "@/lib/mongodb";
 import Order from "@/models/Order";
 import Notification from "@/models/Notification";
-import getServerSession from "@/lib/auth";
+import { getServerSession } from "@/lib/auth";
 import User from "@/models/User";
 
 // Define mockOrder and mockOrder2 for use in all tests
@@ -83,15 +84,11 @@ const mockOrder = {
 describe("Orders API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset all OrderMock static methods
-    // (OrderMock as any).find.mockReset(); // This line is no longer needed as OrderMock is now a mock function
-    // (OrderMock as any).findById.mockReset(); // This line is no longer needed as OrderMock is now a mock function
-    // (OrderMock as any).findOne.mockReset(); // This line is no longer needed as OrderMock is now a mock function
-    // (OrderMock as any).findByIdAndUpdate.mockReset(); // This line is no longer needed as OrderMock is now a mock function
-    // (OrderMock as any).findOneAndUpdate.mockReset(); // This line is no longer needed as OrderMock is now a mock function
-    // (OrderMock as any).findByIdAndDelete.mockReset(); // This line is no longer needed as OrderMock is now a mock function
-    // mockOrderInstance.save.mockReset(); // This line is no longer needed as OrderMock is now a mock function
-    // mockOrderInstance.populate.mockReset(); // This line is no longer needed as OrderMock is now a mock function
+    // Default: authenticated session
+    getServerSession.mockResolvedValue({
+      user: { id: "user1", email: "user@example.com", role: "user" },
+      expires: "2099-12-31T23:59:59.999Z",
+    });
   });
 
   afterEach(() => {
@@ -103,13 +100,13 @@ describe("Orders API", () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
       // Mock user session
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "user1",
-          email: "user@example.com",
-          role: "user",
-        },
-      });
+      // vi.mocked(getServerSession).mockResolvedValue({
+      //   user: {
+      //     id: "user1",
+      //     email: "user@example.com",
+      //     role: "user",
+      //   },
+      // });
       // Mock user data
       vi.mocked(User.findOne).mockResolvedValue({ _id: "user1", email: "user@example.com", role: "user" });
       // Mock Order.find chain
@@ -140,13 +137,13 @@ describe("Orders API", () => {
       );
 
       // Mock user session
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "user1",
-          email: "user@example.com",
-          role: "user",
-        },
-      });
+      // vi.mocked(getServerSession).mockResolvedValue({
+      //   user: {
+      //     id: "user1",
+      //     email: "user@example.com",
+      //     role: "user",
+      //   },
+      // });
 
       // Mock user data
       vi.mocked(User.findOne).mockResolvedValue({ _id: "user1", email: "user@example.com", role: "user" });
@@ -180,14 +177,14 @@ describe("Orders API", () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
       // Mock user session
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "user1",
-          email: "user@example.com",
-          name: "Test User",
-          role: "user",
-        },
-      });
+      // vi.mocked(getServerSession).mockResolvedValue({
+      //   user: {
+      //     id: "user1",
+      //     email: "user@example.com",
+      //     name: "Test User",
+      //     role: "user",
+      //   },
+      // });
       // Mock user data
       vi.mocked(User.findOne).mockResolvedValue({ _id: "user1", email: "user@example.com", role: "user" });
       // Mock Order.findOne to simulate no existing order
@@ -214,14 +211,14 @@ describe("Orders API", () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
       // Mock user session
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "user1",
-          email: "user@example.com",
-          name: "Test User",
-          role: "user",
-        },
-      });
+      // vi.mocked(getServerSession).mockResolvedValue({
+      //   user: {
+      //     id: "user1",
+      //     email: "user@example.com",
+      //     name: "Test User",
+      //     role: "user",
+      //   },
+      // });
       // Mock user data
       vi.mocked(User.findOne).mockReturnValue({
         exec: vi.fn().mockResolvedValue({ _id: "user1", email: "user@example.com", role: "user" }),
@@ -307,13 +304,13 @@ describe("Orders API", () => {
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
       // Mock user session
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "user1",
-          email: "user@example.com",
-          role: "user",
-        },
-      });
+      // vi.mocked(getServerSession).mockResolvedValue({
+      //   user: {
+      //     id: "user1",
+      //     email: "user@example.com",
+      //     role: "user",
+      //   },
+      // });
       // Mock user data
       vi.mocked(User.findOne).mockReturnValue({
         exec: vi.fn().mockResolvedValue({ _id: "user1", email: "user@example.com", role: "user" }),
@@ -372,16 +369,20 @@ describe("Orders API", () => {
 
   describe("GET /api/admin/orders", () => {
     it("should return all orders for admin", async () => {
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "admin1", email: "admin@example.com", role: "admin" },
+        expires: "2099-12-31T23:59:59.999Z",
+      });
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
       // Mock user session as admin
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "admin1",
-          email: "admin@example.com",
-          role: "admin",
-        },
-      });
+      // vi.mocked(getServerSession).mockResolvedValue({
+      //   user: {
+      //     id: "admin1",
+      //     email: "admin@example.com",
+      //     role: "admin",
+      //   },
+      // });
       // Mock user data
       vi.mocked(User.findOne).mockResolvedValue({ _id: "admin1", email: "admin@example.com", role: "admin" });
       // Mock User.findById for user details population
@@ -424,18 +425,22 @@ describe("Orders API", () => {
       expect(data.orders[1].userName).toBe("User Two");
     });
 
-    it("should return 401 for non-admin users", async () => {
+    it("should return 403 for non-admin users", async () => {
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "user1", email: "user@example.com", role: "user" },
+        expires: "2099-12-31T23:59:59.999Z",
+      });
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock regular user session
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "user1",
-          email: "user@example.com",
-          role: "user",
-        },
-      });
+      // vi.mocked(getServerSession).mockResolvedValue({
+      //   user: {
+      //     id: "user1",
+      //     email: "user@example.com",
+      //     role: "user",
+      //   },
+      // });
 
       // Mock user data
       vi.mocked(User.findOne).mockResolvedValue({ _id: "user1", email: "user@example.com", role: "user" });
@@ -453,17 +458,21 @@ describe("Orders API", () => {
 
   describe("POST /api/admin/orders/process", () => {
     it("should process orders successfully as admin", async () => {
+      (getServerSession as unknown as Mock).mockResolvedValue({
+        user: { id: "admin1", email: "admin@example.com", role: "admin" },
+        expires: "2099-12-31T23:59:59.999Z",
+      });
       // Mock database connection
       vi.mocked(dbConnect).mockResolvedValue(undefined);
 
       // Mock admin session
-      vi.mocked(getServerSession).mockResolvedValue({
-        user: {
-          id: "admin1",
-          email: "admin@example.com",
-          role: "admin",
-        },
-      });
+      // vi.mocked(getServerSession).mockResolvedValue({
+      //   user: {
+      //     id: "admin1",
+      //     email: "admin@example.com",
+      //     role: "admin",
+      //   },
+      // });
 
       // Mock user data
       vi.mocked(User.findOne).mockResolvedValue({ _id: "admin1", email: "admin@example.com", role: "admin" });
