@@ -41,20 +41,20 @@ export async function createIndexes() {
  * Utility function to convert MongoDB document to plain object
  * and handle ObjectId conversion to string
  */
-export function sanitizeDocument(doc: any) {
+export function sanitizeDocument(doc: unknown) {
   if (!doc) return null;
 
-  const obj = doc.toObject ? doc.toObject() : doc;
+  const obj = (doc as { toObject?: () => Record<string, unknown> }).toObject ? (doc as { toObject: () => Record<string, unknown> }).toObject() : doc as Record<string, unknown>;
 
   // Convert _id to string if it exists
   if (obj._id) {
-    obj._id = obj._id.toString();
+    obj._id = (obj._id as { toString: () => string }).toString();
   }
 
   // Convert any other ObjectId fields to strings
   Object.keys(obj).forEach((key) => {
     if (obj[key] instanceof mongoose.Types.ObjectId) {
-      obj[key] = obj[key].toString();
+      obj[key] = (obj[key] as { toString: () => string }).toString();
     }
   });
 
@@ -64,7 +64,7 @@ export function sanitizeDocument(doc: any) {
 /**
  * Utility function to sanitize an array of documents
  */
-export function sanitizeDocuments(docs: any[]) {
+export function sanitizeDocuments(docs: unknown[]) {
   if (!docs) return [];
   return docs.map((doc) => sanitizeDocument(doc));
 }
@@ -72,11 +72,13 @@ export function sanitizeDocuments(docs: any[]) {
 /**
  * Utility function to handle database errors
  */
-export function handleDbError(error: any) {
+export function handleDbError(error: unknown) {
   console.error("Database error:", error);
 
+  const errorObj = error as { code?: number; name?: string; message?: string };
+
   // Check for specific MongoDB error types
-  if (error.code === 11000) {
+  if (errorObj.code === 11000) {
     // Duplicate key error
     return {
       status: 409,
@@ -84,10 +86,10 @@ export function handleDbError(error: any) {
     };
   }
 
-  if (error.name === "ValidationError") {
+  if (errorObj.name === "ValidationError") {
     return {
       status: 400,
-      message: "Validation error: " + error.message,
+      message: "Validation error: " + errorObj.message,
     };
   }
 

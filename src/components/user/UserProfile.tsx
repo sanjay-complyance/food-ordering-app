@@ -9,14 +9,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import NotificationPreferences from "./NotificationPreferences";
-import { useToast } from "@/lib/toast";
+
 
 export default function UserProfile() {
   const { data: session } = useSession();
-  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("profile");
 
   if (!session?.user) {

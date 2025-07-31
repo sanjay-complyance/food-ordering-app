@@ -159,7 +159,7 @@ export function NotificationCenter({
               No notifications yet
             </p>
             <p className="text-xs text-gray-500">
-              You'll see order reminders and updates here
+              You&apos;ll see order reminders and updates here
             </p>
           </div>
         ) : (

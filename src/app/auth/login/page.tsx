@@ -7,10 +7,10 @@ import { LoginForm } from "@/components/auth/LoginForm";
 import Link from "next/link";
 
 function LoginContent() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/";
+  const callbackUrl = searchParams?.get("callbackUrl") || "/";
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -47,7 +47,7 @@ function LoginContent() {
 
         <div className="text-center">
           <p className="text-sm text-gray-600">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link
               href={`/auth/signup${
                 callbackUrl !== "/"

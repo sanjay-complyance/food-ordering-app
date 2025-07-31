@@ -14,6 +14,7 @@ export default function Home() {
   const [selectedItems, setSelectedItems] = useState<IMenuItem[]>([]);
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleSelectItem = (item: IMenuItem) => {
     setSelectedItems(prev => {
@@ -37,6 +38,7 @@ export default function Home() {
     setShowOrderForm(false);
     setSelectedItems([]);
     setOrderSuccess(true);
+    setRefreshTrigger(prev => prev + 1); // Trigger refresh of order history
   };
 
   const handleProceedToOrder = () => {
@@ -57,10 +59,25 @@ export default function Home() {
               {/* Menu and Order Form Column */}
               <div className="md:col-span-2 space-y-6">
                 {orderSuccess && (
-                  <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
-                    <span className="block sm:inline">
-                      Your order has been placed successfully!
-                    </span>
+                  <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4 animate-pulse">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium">
+                          Your order has been placed successfully!
+                        </p>
+                        <p className="text-xs mt-1">
+                          Check the &quot;Today&apos;s Order&quot; section to see your order details.
+                        </p>
+                        <p className="text-xs mt-1 text-green-600">
+                          The page will automatically refresh to show your order.
+                        </p>
+                      </div>
+                    </div>
                     <Button
                       className="absolute top-0 right-0 mt-2 mr-2"
                       variant="ghost"
@@ -111,7 +128,7 @@ export default function Home() {
 
               {/* Order History Column */}
               <div className="md:col-span-1">
-                <OrderHistory limit={5} />
+                <OrderHistory limit={5} refreshTrigger={refreshTrigger} />
               </div>
             </div>
           </div>

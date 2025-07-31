@@ -188,3 +188,35 @@ export class PWAManager {
 }
 
 export const pwaManager = PWAManager.getInstance();
+
+const VAPID_PUBLIC_KEY = 'BMyKCU9-fHcPKNeKxpxWbmMaw3cdUuTd8DjP3PaSiOEZRA8yOcaCKHdmyEU3DhXlOE4pKdJq4DhKj29jj8B6iaE';
+
+export async function subscribeUserToPush() {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    throw new Error('Push notifications are not supported in this browser.');
+  }
+  // Register service worker if not already
+  const registration = await navigator.serviceWorker.ready;
+  // Request notification permission
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    throw new Error('Notification permission not granted.');
+  }
+  // Subscribe to push
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+  });
+  return subscription;
+}
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}

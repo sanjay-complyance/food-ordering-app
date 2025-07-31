@@ -58,11 +58,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let query: any = { userId: user._id };
+    const query: Record<string, unknown> = { userId: user._id };
 
     // If date parameter is provided, filter by date
     if (dateParam) {
-      const date = new Date(dateParam);
+      const [filterYear, filterMonth, filterDay] = dateParam.split('-').map(Number);
+      const date = new Date(filterYear, filterMonth - 1, filterDay); // month is 0-indexed
+      
       if (isNaN(date.getTime())) {
         return NextResponse.json(
           { error: "Invalid date format" },
@@ -70,9 +72,13 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      // Create start and end of the specified date in UTC
+      const startOfDay = new Date(Date.UTC(filterYear, filterMonth - 1, filterDay, 0, 0, 0, 0));
+      const endOfDay = new Date(Date.UTC(filterYear, filterMonth - 1, filterDay, 23, 59, 59, 999));
+
       query.orderDate = {
-        $gte: new Date(date.setHours(0, 0, 0, 0)),
-        $lt: new Date(date.setHours(23, 59, 59, 999)),
+        $gte: startOfDay,
+        $lt: endOfDay,
       };
     }
 
@@ -121,6 +127,9 @@ export async function POST(request: NextRequest) {
 
     const { orderDate, items } = validationResult.data;
 
+    console.log("Order creation - Input orderDate:", orderDate);
+    console.log("Order creation - Current date:", new Date().toISOString());
+
     await connectToDatabase();
 
     // Find user by email
@@ -132,32 +141,102 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user already has an order for this date
+    // Check if user already has an active order for this date (excluding cancelled orders)
+    const [checkYear, checkMonth, checkDay] = orderDate.split('-').map(Number);
+    const orderDateStart = new Date(Date.UTC(checkYear, checkMonth - 1, checkDay, 0, 0, 0, 0));
+    const orderDateEnd = new Date(Date.UTC(checkYear, checkMonth - 1, checkDay, 23, 59, 59, 999));
+    
     const existingOrder = await Order.findOne({
       userId: user._id,
       orderDate: {
-        $gte: new Date(new Date(orderDate).setHours(0, 0, 0, 0)),
-        $lt: new Date(new Date(orderDate).setHours(23, 59, 59, 999)),
+        $gte: orderDateStart,
+        $lt: orderDateEnd,
       },
+      status: { $ne: "cancelled" }, // Exclude cancelled orders
     });
 
     if (existingOrder) {
       return NextResponse.json(
-        { error: "You already have an order for this date" },
+        { error: "You already have an active order for this date" },
         { status: 409 }
       );
     }
 
-    // Create new order
+    // Create new order with proper date handling
+    // Parse the date string and create a date at start of day in UTC
+    const [orderYear, orderMonth, orderDay] = orderDate.split('-').map(Number);
+    
+    // Create date at start of day in UTC to avoid timezone issues
+    const orderDateObj = new Date(Date.UTC(orderYear, orderMonth - 1, orderDay, 0, 0, 0, 0));
+    
+    console.log("Order creation - Parsed orderDate:", orderDateObj);
+    console.log("Order creation - OrderDate ISO:", orderDateObj.toISOString());
+    
     const order = new Order({
       userId: user._id,
-      orderDate: new Date(orderDate),
+      orderDate: orderDateObj,
       items: items,
       status: "pending",
     });
 
     await order.save();
     await order.populate("userId", "name email");
+
+    // Create notification for the user
+    try {
+      const notification = new Notification({
+        userId: user._id,
+        type: "order_confirmed",
+        message: `Your order for ${new Date(orderDate).toLocaleDateString()} has been placed successfully!`,
+        read: false,
+      });
+      await notification.save();
+
+      // Send push notification if user has subscription
+      if (user.pushSubscription) {
+        try {
+          const { sendPushNotification } = await import('@/lib/notifications');
+          await sendPushNotification(user.pushSubscription, {
+            title: "Order Confirmed! 🍽️",
+            options: {
+              body: `Your order for ${new Date(orderDate).toLocaleDateString()} has been placed successfully!`,
+              icon: "/icons/icon-192x192.svg",
+              badge: "/icons/icon-72x72.svg",
+              tag: "order-confirmation",
+              requireInteraction: true,
+              actions: [
+                {
+                  action: "view",
+                  title: "View Order",
+                  icon: "/icons/icon-72x72.svg",
+                },
+                {
+                  action: "dismiss",
+                  title: "Dismiss",
+                },
+              ],
+            },
+          });
+        } catch (pushError) {
+          console.error("Failed to send push notification:", pushError);
+          // Don't fail the order creation if push notification fails
+        }
+      }
+    } catch (notificationError) {
+      console.error("Failed to create notification:", notificationError);
+      // Don't fail the order creation if notification fails
+    }
+
+    // Create admin notification
+    try {
+      await createAdminNotification(
+        `${user.name} (${user.email}) placed a new order for ${new Date(orderDate).toLocaleDateString()}`,
+        "order_modified"
+      );
+    } catch (adminNotificationError) {
+      console.error("Failed to create admin notification:", adminNotificationError);
+      // Don't fail the order creation if admin notification fails
+    }
 
     return NextResponse.json(
       {
@@ -303,12 +382,8 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Store original values for notification
-    const originalItems = existingOrder.items;
-    const originalStatus = existingOrder.status;
-
     // Update order
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       items: validationResult.data.items,
     };
 
@@ -326,7 +401,7 @@ export async function PUT(request: NextRequest) {
 
     // Create admin notification if order was modified by user
     if (isOwner && !isAdmin) {
-      const userName = (updatedOrder.userId as any).name || (updatedOrder.userId as any).email;
+      const userName = (updatedOrder.userId as unknown as { name?: string; email?: string }).name || (updatedOrder.userId as unknown as { name?: string; email?: string }).email;
       const message = `${userName} modified their order for ${updatedOrder.orderDate.toDateString()}`;
       await createAdminNotification(message);
     }
@@ -411,7 +486,7 @@ export async function DELETE(request: NextRequest) {
 
     // Create admin notification if order was deleted by user
     if (isOwner && !isAdmin) {
-      const userName = (existingOrder.userId as any).name || (existingOrder.userId as any).email;
+      const userName = (existingOrder.userId as unknown as { name?: string; email?: string }).name || (existingOrder.userId as unknown as { name?: string; email?: string }).email;
       const message = `${userName} cancelled their order for ${existingOrder.orderDate.toDateString()}`;
       await createAdminNotification(message);
     }

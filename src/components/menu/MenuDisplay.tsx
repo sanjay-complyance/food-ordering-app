@@ -81,10 +81,10 @@ export function MenuDisplay({ onSelectItem, selectedItems = [] }: MenuDisplayPro
     fetchMenu();
     
     // Set up a refresh interval to keep the menu updated
-    const intervalId = setInterval(fetchMenu, 30000); // Refresh every 30 seconds
+    const intervalId = setInterval(fetchMenu, 60000); // Refresh every 60 seconds (reduced frequency)
     
     return () => clearInterval(intervalId);
-  }, [toast]);
+  }, []);
 
   if (loading) {
     return <MenuDisplaySkeleton />;

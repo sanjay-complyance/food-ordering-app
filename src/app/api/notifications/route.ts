@@ -14,7 +14,6 @@ import {
 import {
   filterNotificationsByPreferences,
   sendNotificationToUser,
-  shouldReceiveNotification,
 } from "@/lib/notification-preferences";
 
 // GET /api/notifications - Get notifications for the current user
@@ -38,7 +37,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "50");
 
     // Build query - get user-specific notifications and system-wide notifications
-    const query: Record<string, any> = {
+    const query: Record<string, unknown> = {
       $or: [
         { userId: user._id },
         { userId: null }, // system-wide notifications

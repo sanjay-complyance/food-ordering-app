@@ -45,6 +45,15 @@ export interface IOrderItem {
 }
 
 // User interface
+export interface PushSubscription {
+  endpoint: string;
+  expirationTime: number | null;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+}
+
 export interface IUser extends Document {
   _id: ObjectId;
   email: string;
@@ -54,6 +63,7 @@ export interface IUser extends Document {
   notificationPreferences: INotificationPreferences;
   createdAt: Date;
   updatedAt: Date;
+  pushSubscription?: PushSubscription;
 }
 
 // Menu interface

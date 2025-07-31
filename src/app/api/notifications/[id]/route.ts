@@ -10,6 +10,7 @@ import {
   ValidationError,
   ForbiddenError,
 } from "@/lib/api-error-handler";
+import mongoose from "mongoose";
 
 // PUT /api/notifications/[id] - Mark notification as read/unread
 export async function PUT(
@@ -31,6 +32,12 @@ export async function PUT(
     }
 
     const { id } = params;
+    
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new ValidationError("Invalid notification ID");
+    }
+
     const body = await request.json();
     const { read } = body;
 
@@ -90,6 +97,10 @@ export async function DELETE(
     }
 
     const { id } = params;
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new ValidationError("Invalid notification ID");
+    }
 
     // Find the notification
     const notification = await Notification.findById(id);

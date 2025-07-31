@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import dbConnect from "@/lib/mongodb";
 import Menu from "@/models/Menu";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     console.log("Menu API: Starting request");
     

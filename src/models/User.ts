@@ -62,6 +62,10 @@ const UserSchema = new Schema<IUser>(
         default: "all",
       },
     },
+    pushSubscription: {
+      type: Schema.Types.Mixed,
+      required: false,
+    },
   },
   {
     timestamps: true,

@@ -7,10 +7,13 @@ import { Button } from "../ui/button";
 import MenuManager from "./MenuManager";
 import OrdersView from "./OrdersView";
 import UserManager from "./UserManager";
+import ScheduledJobsPanel from "./ScheduledJobsPanel";
+import InviteEmployeePanel from "./InviteEmployeePanel";
+import AnalyticsPanel from "./AnalyticsPanel";
 
 export default function AdminDashboard() {
   const { isAdmin, isSuperuser } = useAuth();
-  const [activeTab, setActiveTab] = useState<"orders" | "menu" | "users">(
+  const [activeTab, setActiveTab] = useState<"orders" | "menu" | "users" | "analytics">(
     "orders"
   );
 
@@ -66,20 +69,33 @@ export default function AdminDashboard() {
             User Management
           </Button>
         )}
+        <Button
+          variant={activeTab === "analytics" ? "default" : "ghost"}
+          className={`rounded-none ${
+            activeTab === "analytics" ? "" : "hover:text-primary"
+          }`}
+          onClick={() => setActiveTab("analytics")}
+        >
+          Analytics
+        </Button>
       </div>
 
       <div className="mt-6">
         {activeTab === "orders" && <OrdersView />}
         {activeTab === "menu" && <MenuManager />}
         {activeTab === "users" && isSuperuser && <UserManager />}
+        {activeTab === "analytics" && <AnalyticsPanel />}
       </div>
 
+      <div className="mt-8">
+        <InviteEmployeePanel />
+      </div>
       <div className="mt-8">
         <Card className="p-6 bg-gray-50">
           <h2 className="text-xl font-semibold mb-4">Admin Quick Stats</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-4 rounded-lg shadow-sm">
-              <div className="text-sm text-gray-500">Today's Orders</div>
+              <div className="text-sm text-gray-500">Today&apos;s Orders</div>
               <div className="text-2xl font-bold mt-1">--</div>
             </div>
             <div className="bg-white p-4 rounded-lg shadow-sm">
@@ -92,6 +108,9 @@ export default function AdminDashboard() {
             </div>
           </div>
         </Card>
+      </div>
+      <div className="mt-8">
+        <ScheduledJobsPanel />
       </div>
     </div>
   );

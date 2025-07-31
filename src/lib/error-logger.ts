@@ -99,7 +99,7 @@ export function createErrorHandler() {
         const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
         const payload = JSON.parse(Buffer.from(base64, "base64").toString());
         userId = payload.sub || payload.id;
-      } catch (_) {
+      } catch {
         // Ignore token parsing errors
       }
     }

@@ -11,7 +11,7 @@ import {
 } from "@/lib/api-error-handler";
 
 // GET /api/user/preferences - Get notification preferences for the current user
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await auth();
     if (!session?.user) {
@@ -76,12 +76,14 @@ export async function PUT(request: NextRequest) {
 
 // Validate notification preferences
 function validatePreferences(
-  preferences: any
+  preferences: unknown
 ): asserts preferences is INotificationPreferences {
   // Check if preferences is an object
   if (!preferences || typeof preferences !== "object") {
     throw new ValidationError("Invalid preferences format");
   }
+
+  const prefs = preferences as Record<string, unknown>;
 
   // Validate boolean fields
   const booleanFields = [
@@ -91,20 +93,20 @@ function validatePreferences(
     "menuUpdates",
   ];
   for (const field of booleanFields) {
-    if (typeof preferences[field] !== "boolean") {
+    if (typeof prefs[field] !== "boolean") {
       throw new ValidationError(`${field} must be a boolean`);
     }
   }
 
   // Validate delivery method
   const validDeliveryMethods = ["in_app", "email", "both"];
-  if (!validDeliveryMethods.includes(preferences.deliveryMethod)) {
+  if (!validDeliveryMethods.includes(prefs.deliveryMethod as string)) {
     throw new ValidationError("Invalid delivery method");
   }
 
   // Validate frequency
   const validFrequencies = ["all", "important_only", "none"];
-  if (!validFrequencies.includes(preferences.frequency)) {
+  if (!validFrequencies.includes(prefs.frequency as string)) {
     throw new ValidationError("Invalid notification frequency");
   }
 }

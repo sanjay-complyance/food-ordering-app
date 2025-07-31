@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/popover";
 import { NotificationCenter } from "./NotificationCenter";
 import { INotification } from "@/types/models";
+import { useRef } from "react";
 
 interface NotificationBellProps {
   className?: string;
@@ -21,6 +22,7 @@ export function NotificationBell({ className }: NotificationBellProps) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   // Fetch notifications
   const fetchNotifications = async () => {
@@ -29,8 +31,6 @@ export function NotificationBell({ className }: NotificationBellProps) {
       if (response.ok) {
         const data = await response.json();
         setNotifications(data.notifications || []);
-
-        // Count unread notifications
         const unread =
           data.notifications?.filter((n: INotification) => !n.read).length || 0;
         setUnreadCount(unread);
@@ -97,15 +97,46 @@ export function NotificationBell({ className }: NotificationBellProps) {
     }
   };
 
-  // Polling for new notifications
+  // SSE: Listen for real-time notification updates
   useEffect(() => {
     fetchNotifications();
-
-    // Set up polling every 30 seconds when component is mounted
+    // Set up SSE connection
+    const eventSource = new EventSource("/api/notifications/stream");
+    eventSourceRef.current = eventSource;
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (Array.isArray(data.notifications)) {
+          setNotifications((prev) => {
+            // Merge and deduplicate by _id
+            const notifMap = new Map();
+            // Add existing notifications
+            prev.forEach((n: INotification) => notifMap.set(n._id.toString(), n));
+            // Add/replace with new notifications
+            (data.notifications as INotification[]).forEach((n: INotification) => notifMap.set(n._id.toString(), n));
+            // Convert to array and sort by createdAt desc
+            return Array.from(notifMap.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          });
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    };
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+    // Set up polling every 30 seconds as fallback
     const interval = setInterval(fetchNotifications, 30000);
-
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      eventSource.close();
+    };
   }, []);
+
+  // Update unread count when notifications change
+  useEffect(() => {
+    setUnreadCount(notifications.filter((n) => !n.read).length);
+  }, [notifications]);
 
   // Refresh notifications when popover opens
   const handleOpenChange = (open: boolean) => {

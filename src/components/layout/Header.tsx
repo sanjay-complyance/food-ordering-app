@@ -99,12 +99,13 @@ export function Header() {
                   <Settings className="h-4 w-4" />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-2xl bg-white !bg-white">
                 <DialogHeader>
                   <DialogTitle>Notification Preferences</DialogTitle>
                 </DialogHeader>
                 <NotificationPreferences
                   onClose={() => setPreferencesOpen(false)}
+                  isModal={true}
                 />
               </DialogContent>
             </Dialog>

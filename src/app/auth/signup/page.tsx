@@ -7,10 +7,10 @@ import { SignupForm } from "@/components/auth/SignupForm";
 import Link from "next/link";
 
 function SignupContent() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/";
+  const callbackUrl = searchParams?.get("callbackUrl") || "/";
 
   useEffect(() => {
     if (status === "authenticated") {

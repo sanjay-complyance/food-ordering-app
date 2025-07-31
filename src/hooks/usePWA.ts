@@ -71,7 +71,7 @@ export function usePWA() {
         setState((prev) => ({ ...prev, isInstalling: false }));
       }
       return success;
-    } catch (error) {
+    } catch {
       setState((prev) => ({ ...prev, isInstalling: false }));
       return false;
     }
@@ -96,4 +96,63 @@ export function usePWA() {
     requestNotificationPermission,
     showNotification,
   };
+}
+
+// Define a minimal Order type for queueing
+export interface QueuedOrder {
+  id: string;
+  items: unknown[]; // Use unknown[] instead of any[]
+  notes?: string;
+}
+
+export function useOrderQueue() {
+  const [queue, setQueue] = useState<QueuedOrder[]>([]);
+
+  // Load queue from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem("orderQueue");
+    if (stored) setQueue(JSON.parse(stored));
+  }, []);
+
+  // Save queue to localStorage
+  useEffect(() => {
+    localStorage.setItem("orderQueue", JSON.stringify(queue));
+  }, [queue]);
+
+  // Add order to queue
+  const addToQueue = useCallback((order: QueuedOrder) => {
+    setQueue((q) => [...q, order]);
+  }, []);
+
+  // Remove order from queue
+  const removeFromQueue = useCallback((id: string) => {
+    setQueue((q) => q.filter((o) => o.id !== id));
+  }, []);
+
+  // Sync orders when online
+  const syncQueue = useCallback(async () => {
+    for (const order of queue) {
+      try {
+        const res = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(order),
+        });
+        if (res.ok) {
+          removeFromQueue(order.id);
+        }
+      } catch {}
+    }
+  }, [queue, removeFromQueue]);
+
+  // Listen for online event
+  useEffect(() => {
+    const handler = () => {
+      if (queue.length > 0) syncQueue();
+    };
+    window.addEventListener("online", handler);
+    return () => window.removeEventListener("online", handler);
+  }, [queue, syncQueue]);
+
+  return { queue, addToQueue, removeFromQueue, syncQueue };
 }

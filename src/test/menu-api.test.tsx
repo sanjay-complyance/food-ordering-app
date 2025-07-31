@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { OrderForm } from "@/components/menu/OrderForm";
+import * as usePWA from "@/hooks/usePWA";
+import { ToastProvider } from "@/lib/toast";
 
 // Mock dependencies
 vi.mock("@/lib/mongodb", () => ({
@@ -66,6 +70,7 @@ describe("Menu API", () => {
           email: "admin@example.com",
           role: "admin",
         },
+        expires: "2099-12-31T23:59:59.999Z"
       });
 
       // Mock menu data
@@ -87,7 +92,7 @@ describe("Menu API", () => {
         populate: vi.fn().mockReturnValue({
           sort: vi.fn().mockReturnValue(mockMenus),
         }),
-      } as any);
+      } as Partial<typeof Menu>);
 
       const request = new NextRequest("http://localhost:3000/api/menu");
       const response = await GET(request);
@@ -110,6 +115,7 @@ describe("Menu API", () => {
           email: "admin@example.com",
           role: "admin",
         },
+        expires: "2099-12-31T23:59:59.999Z"
       });
       const request = new NextRequest("http://localhost:3000/api/menu");
       const response = await GET(request);
@@ -131,6 +137,7 @@ describe("Menu API", () => {
           email: "admin@example.com",
           role: "admin",
         },
+        expires: "2099-12-31T23:59:59.999Z"
       });
       // Mock session
       vi.mocked(auth).mockResolvedValue({
@@ -139,6 +146,7 @@ describe("Menu API", () => {
           email: "admin@example.com",
           role: "admin",
         },
+        expires: "2099-12-31T23:59:59.999Z"
       });
       // Mock MenuItem.find to return items with a sort method
       const items = [
@@ -167,6 +175,7 @@ describe("Menu API", () => {
           email: "admin@example.com",
           role: "admin",
         },
+        expires: "2099-12-31T23:59:59.999Z"
       });
       // Mock session
       vi.mocked(auth).mockResolvedValue({
@@ -175,6 +184,7 @@ describe("Menu API", () => {
           email: "admin@example.com",
           role: "admin",
         },
+        expires: "2099-12-31T23:59:59.999Z"
       });
       // Mock MenuItem.find to return empty array with a sort method
       const { MenuItem } = await import("@/models/MenuItem");
@@ -200,6 +210,7 @@ describe("Menu API", () => {
           email: "admin@example.com",
           role: "admin",
         },
+        expires: "2099-12-31T23:59:59.999Z"
       });
       // Patch the MenuMock constructor for this test
       (Menu as any).mockImplementation(function (data: any) {
@@ -263,6 +274,7 @@ describe("Menu API", () => {
           email: "user@example.com",
           role: "user",
         },
+        expires: "2099-12-31T23:59:59.999Z"
       });
       const request = new NextRequest("http://localhost:3000/api/menu", {
         method: "POST",
@@ -292,6 +304,7 @@ describe("Menu API", () => {
           email: "admin@example.com",
           role: "admin",
         },
+        expires: "2099-12-31T23:59:59.999Z"
       });
       // Mock menu update
       const mockUpdatedMenu = {
@@ -313,7 +326,7 @@ describe("Menu API", () => {
       };
       vi.mocked(Menu.findByIdAndUpdate).mockReturnValue({
         populate: vi.fn().mockResolvedValue(mockUpdatedMenu),
-      } as any);
+      } as Partial<typeof Menu>);
       const request = new NextRequest("http://localhost:3000/api/menu", {
         method: "PUT",
         body: JSON.stringify({
@@ -350,13 +363,14 @@ describe("Menu API", () => {
           email: "admin@example.com",
           role: "admin",
         },
+        expires: "2099-12-31T23:59:59.999Z"
       });
 
       // Mock menu deletion
       vi.mocked(Menu.findByIdAndDelete).mockResolvedValue({
         _id: "menu1",
         date: new Date("2025-07-21"),
-      } as any);
+      } as Partial<typeof Menu>);
 
       const request = new NextRequest(
         "http://localhost:3000/api/menu?id=menu1",
@@ -371,5 +385,41 @@ describe("Menu API", () => {
       expect(response.status).toBe(200);
       expect(data.message).toBe("Menu deleted successfully");
     });
+  });
+});
+
+describe("OrderForm offline queue", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(navigator, "onLine", { value: false, writable: true });
+    localStorage.clear();
+  });
+
+  it("queues order when offline", async () => {
+    const addToQueue = vi.fn();
+    vi.spyOn(usePWA, "useOrderQueue").mockReturnValue({ queue: [], addToQueue, removeFromQueue: vi.fn(), syncQueue: vi.fn() });
+    const mockMenuItem = { name: "Test Item", description: "A test item", available: true };
+    render(
+      <ToastProvider>
+        <OrderForm selectedItems={[mockMenuItem]} onCancel={vi.fn()} onSuccess={vi.fn()} />
+      </ToastProvider>
+    );
+    fireEvent.submit(screen.getByTestId("order-form"));
+    await waitFor(() => {
+      expect(addToQueue).toHaveBeenCalled();
+      expect(screen.getByText(/queued and will be submitted/i)).toBeTruthy();
+    });
+  });
+
+  it("shows queued orders and sync button", () => {
+    vi.spyOn(usePWA, "useOrderQueue").mockReturnValue({ queue: [{ id: "1", items: [] }], addToQueue: vi.fn(), removeFromQueue: vi.fn(), syncQueue: vi.fn() });
+    const mockMenuItem = { name: "Test Item", description: "A test item", available: true };
+    render(
+      <ToastProvider>
+        <OrderForm selectedItems={[mockMenuItem]} onCancel={vi.fn()} onSuccess={vi.fn()} />
+      </ToastProvider>
+    );
+    expect(screen.getByText(/1 order\(s\) queued/i)).toBeTruthy();
+    expect(screen.getByText(/Sync Now/i)).toBeTruthy();
   });
 });

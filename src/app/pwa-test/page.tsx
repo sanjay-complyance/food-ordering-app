@@ -6,10 +6,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info, Download, CheckCircle, XCircle } from "lucide-react";
+import { PushNotificationTest } from "@/components/pwa/PushNotificationTest";
 
 export default function PWATestPage() {
   const { canInstall, isInstalling, installApp, isInstalled } = usePWA();
-  const [pwaInfo, setPwaInfo] = useState<any>({});
+  const [pwaInfo, setPwaInfo] = useState<{
+    hasServiceWorker: boolean;
+    hasManifest: boolean;
+    isHTTPS: boolean;
+    isStandalone: boolean;
+    userAgent: string;
+    platform: string;
+    isDevelopment: boolean;
+  }>({
+    hasServiceWorker: false,
+    hasManifest: false,
+    isHTTPS: false,
+    isStandalone: false,
+    userAgent: '',
+    platform: '',
+    isDevelopment: false,
+  });
 
   useEffect(() => {
     // Check PWA criteria
@@ -156,6 +173,15 @@ export default function PWATestPage() {
                 </ul>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Push Notification Test</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PushNotificationTest />
           </CardContent>
         </Card>
       </div>

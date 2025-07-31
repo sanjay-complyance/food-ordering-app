@@ -11,31 +11,7 @@ const statusUpdateSchema = z.object({
   status: z.enum(["pending", "confirmed", "cancelled"]),
 });
 
-// Helper function to create admin notifications
-async function createAdminNotification(
-  message: string,
-  type: "order_modified" = "order_modified"
-) {
-  try {
-    // Find all admin and superuser accounts
-    const admins = await User.find({ role: { $in: ["admin", "superuser"] } });
 
-    // Create notifications for each admin
-    const notifications = admins.map((admin) => ({
-      userId: admin._id,
-      type,
-      message,
-      read: false,
-    }));
-
-    if (notifications.length > 0) {
-      await Notification.insertMany(notifications);
-    }
-  } catch (error) {
-    console.error("Error creating admin notifications:", error);
-    // Don't throw error - notification failure shouldn't break the main operation
-  }
-}
 
 // PATCH /api/orders/[id]/status - Update order status
 export async function PATCH(
@@ -125,7 +101,6 @@ export async function PATCH(
 
     // Create notification for the order owner
     try {
-      const userName = (updatedOrder.userId as any).name || (updatedOrder.userId as any).email;
       const message = `Your order for ${updatedOrder.orderDate.toDateString()} has been ${status}`;
       
       await Notification.create({
@@ -134,6 +109,41 @@ export async function PATCH(
         message,
         read: false,
       });
+
+      // Send push notification if user has subscription
+      const orderOwner = await User.findById(updatedOrder.userId);
+      if (orderOwner?.pushSubscription) {
+        try {
+          const { sendPushNotification } = await import('@/lib/notifications');
+          const statusEmoji = status === "confirmed" ? "✅" : status === "cancelled" ? "❌" : "⏳";
+          const statusText = status === "confirmed" ? "confirmed" : status === "cancelled" ? "cancelled" : "is pending";
+          
+          await sendPushNotification(orderOwner.pushSubscription, {
+            title: `Order ${statusText} ${statusEmoji}`,
+            options: {
+              body: `Your order for ${updatedOrder.orderDate.toDateString()} has been ${status}`,
+              icon: "/icons/icon-192x192.svg",
+              badge: "/icons/icon-72x72.svg",
+              tag: "order-status-update",
+              requireInteraction: true,
+              actions: [
+                {
+                  action: "view",
+                  title: "View Order",
+                  icon: "/icons/icon-72x72.svg",
+                },
+                {
+                  action: "dismiss",
+                  title: "Dismiss",
+                },
+              ],
+            },
+          });
+        } catch (pushError) {
+          console.error("Failed to send push notification:", pushError);
+          // Don't fail the status update if push notification fails
+        }
+      }
     } catch (error) {
       console.error("Error creating user notification:", error);
       // Don't throw error - notification failure shouldn't break the main operation

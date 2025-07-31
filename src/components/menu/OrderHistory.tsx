@@ -14,39 +14,55 @@ import { Badge } from "@/components/ui/badge";
 
 interface OrderHistoryProps {
   limit?: number;
+  refreshTrigger?: number;
 }
 
-export function OrderHistory({ limit }: OrderHistoryProps) {
+export function OrderHistory({ limit, refreshTrigger }: OrderHistoryProps) {
   const [orders, setOrders] = useState<IOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        // Only fetch today's orders for regular users
-        const today = new Date().toISOString().split('T')[0];
-        const response = await fetch(`/api/orders?date=${today}`);
-
-        if (!response.ok) {
-          throw new Error(`Error fetching orders: ${response.statusText}`);
+      // Only fetch today's orders for regular users
+      const now = new Date();
+      const today = now.getFullYear() + '-' + 
+        String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(now.getDate()).padStart(2, '0');
+      console.log("OrderHistory: Fetching orders for date:", today);
+      const response = await fetch(`/api/orders?date=${today}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
         }
+      });
 
-        const data = await response.json();
-        setOrders(limit ? data.data.slice(0, limit) : data.data);
-      } catch (err) {
-        console.error("Failed to fetch orders:", err);
-        setError("Failed to load your order history. Please try again later.");
-      } finally {
-        setLoading(false);
+      if (!response.ok) {
+        throw new Error(`Error fetching orders: ${response.statusText}`);
       }
-    };
 
+      const data = await response.json();
+      setOrders(limit ? data.data.slice(0, limit) : data.data);
+    } catch (err) {
+      console.error("Failed to fetch orders:", err);
+      setError("Failed to load your order history. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchOrders();
-  }, [limit]);
+    
+    // Set up a refresh interval to check for new orders
+    const intervalId = setInterval(fetchOrders, 10000); // Refresh every 10 seconds
+    
+    return () => clearInterval(intervalId);
+  }, [limit, refreshTrigger]);
 
   const handleCancelOrder = async (orderId: string) => {
     try {
@@ -91,7 +107,7 @@ export function OrderHistory({ limit }: OrderHistoryProps) {
     return (
       <Card className="w-full">
               <CardHeader>
-        <CardTitle>Today's Order</CardTitle>
+        <CardTitle>Today&apos;s Order</CardTitle>
         <CardDescription>Loading your order for today...</CardDescription>
       </CardHeader>
         <CardContent>
@@ -107,7 +123,7 @@ export function OrderHistory({ limit }: OrderHistoryProps) {
     return (
       <Card className="w-full">
               <CardHeader>
-        <CardTitle>Today's Order</CardTitle>
+        <CardTitle>Today&apos;s Order</CardTitle>
         <CardDescription>Error</CardDescription>
       </CardHeader>
         <CardContent>
@@ -117,17 +133,45 @@ export function OrderHistory({ limit }: OrderHistoryProps) {
     );
   }
 
+  // Check if all orders are cancelled
+  const hasActiveOrders = orders.some(order => order.status !== 'cancelled');
+  const hasCancelledOrders = orders.some(order => order.status === 'cancelled');
+
   if (orders.length === 0) {
     return (
       <Card className="w-full">
-              <CardHeader>
-        <CardTitle>Today's Order</CardTitle>
-        <CardDescription>Your order for today</CardDescription>
-      </CardHeader>
+        <CardHeader>
+          <CardTitle>Today&apos;s Order</CardTitle>
+          <CardDescription>Your order for today</CardDescription>
+        </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            You haven't placed an order for today yet.
+            You haven&apos;t placed an order for today yet.
           </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // If there are only cancelled orders, show a message that user can place a new order
+  if (!hasActiveOrders && hasCancelledOrders) {
+    return (
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>Today&apos;s Order</CardTitle>
+          <CardDescription>Your order for today</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <p className="text-muted-foreground">
+              Your previous order was cancelled. You can place a new order for today.
+            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-sm text-blue-800">
+                💡 <strong>Tip:</strong> Since your order was cancelled, you can now place a new order for today.
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     );
@@ -136,7 +180,7 @@ export function OrderHistory({ limit }: OrderHistoryProps) {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Today's Order</CardTitle>
+        <CardTitle>Today&apos;s Order</CardTitle>
         <CardDescription>Your order for today</CardDescription>
       </CardHeader>
       <CardContent>
@@ -192,13 +236,13 @@ export function OrderHistory({ limit }: OrderHistoryProps) {
                     // Legacy format with single item
                     <div className="flex justify-between items-center text-sm">
                       <div className="flex-1">
-                        <span className="font-medium">{(order as any).menuItemName || 'Unknown Item'}</span>
+                        <span className="font-medium">{(order as unknown as { menuItemName?: string }).menuItemName || 'Unknown Item'}</span>
                         <span className="text-muted-foreground ml-2">
                           (1x)
                         </span>
                       </div>
                       <span className="text-muted-foreground text-xs">
-                        {(order as any).menuItemDescription || 'No description'}
+                        {(order as unknown as { menuItemDescription?: string }).menuItemDescription || 'No description'}
                       </span>
                     </div>
                   )}

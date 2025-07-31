@@ -3,6 +3,26 @@ import Notification from "@/models/Notification";
 import User from "@/models/User";
 import { NotificationType } from "@/types/models";
 import { ObjectId } from "mongoose";
+import { IUser } from "@/types/models";
+import Settings from "@/models/Settings";
+import webpush from 'web-push';
+
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BMyKCU9-fHcPKNeKxpxWbmMaw3cdUuTd8DjP3PaSiOEZRA8yOcaCKHdmyEU3DhXlOE4pKdJq4DhKj29jj8B6iaE';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '9qrDIc1vV-_57B4pJvkuPzhf0JM7ckyHkDJlm5wVg5Q';
+
+webpush.setVapidDetails(
+  'mailto:sanjay.murthy.29@gmail.com',
+  VAPID_PUBLIC_KEY,
+  VAPID_PRIVATE_KEY
+);
+
+export async function sendPushNotification(subscription: webpush.PushSubscription, payload: Record<string, unknown>) {
+  try {
+    await webpush.sendNotification(subscription, JSON.stringify(payload));
+  } catch (err) {
+    console.error('Push notification error:', err);
+  }
+}
 
 export interface CreateNotificationParams {
   userId?: ObjectId | string | null;
@@ -100,7 +120,7 @@ export async function getUserNotifications(
 
   const { unreadOnly = false, limit = 50, skip = 0 } = options;
 
-  const query: any = {
+  const query: Record<string, unknown> = {
     $or: [
       { userId },
       { userId: null }, // system-wide notifications
@@ -236,19 +256,27 @@ export async function notifyAdminsOfOrderModification(
   });
 }
 
+async function getReminderTimes() {
+  await dbConnect();
+  const settings = await Settings.findOne();
+  return {
+    menuUpdateReminderTime: settings?.menuUpdateReminderTime || "11:00",
+    orderReminderTime: settings?.orderReminderTime || "10:30",
+  };
+}
+
 /**
  * Check if daily reminders should be sent
  */
-export function shouldSendDailyReminders(): boolean {
+export async function shouldSendDailyReminders(): Promise<boolean> {
   const now = new Date();
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
   const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-
-  // Check if it's 10:30 AM on a weekday (Monday-Friday)
+  const { orderReminderTime } = await getReminderTimes();
+  const [reminderHour, reminderMinute] = orderReminderTime.split(":").map(Number);
   const isWeekday = currentDay >= 1 && currentDay <= 5;
-  const isReminderTime = currentHour === 10 && currentMinute === 30;
-
+  const isReminderTime = currentHour === reminderHour && currentMinute === reminderMinute;
   return isWeekday && isReminderTime;
 }
 
@@ -272,4 +300,56 @@ export async function hasReminderBeenSentToday(): Promise<boolean> {
   });
 
   return !!existingReminder;
+}
+
+/**
+ * Check if menu update reminders should be sent (11:00 AM weekdays)
+ */
+export async function shouldSendMenuUpdateReminders(): Promise<boolean> {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  const { menuUpdateReminderTime } = await getReminderTimes();
+  const [reminderHour, reminderMinute] = menuUpdateReminderTime.split(":").map(Number);
+  const isWeekday = currentDay >= 1 && currentDay <= 5;
+  const isReminderTime = currentHour === reminderHour && currentMinute === reminderMinute;
+  return isWeekday && isReminderTime;
+}
+
+/**
+ * Check if menu update reminder has already been sent today
+ */
+export async function hasMenuUpdateReminderBeenSentToday(): Promise<boolean> {
+  await dbConnect();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const existingReminder = await Notification.findOne({
+    type: "menu_updated",
+    message: "Please update today’s lunch menu before 11:30 AM.",
+    createdAt: { $gte: today, $lt: tomorrow },
+  });
+  return !!existingReminder;
+}
+
+/**
+ * Send menu update reminder to all admins
+ */
+export async function sendMenuUpdateReminderToAdmins() {
+  await dbConnect();
+  const User = (await import("@/models/User")).default;
+  const admins: IUser[] = await User.find({ role: { $in: ["admin", "superuser"] } });
+  const message = "Please update today’s lunch menu before 11:30 AM.";
+  const notifications = admins.map((admin) => ({
+    userId: admin._id,
+    type: "menu_updated",
+    message,
+    read: false,
+  }));
+  if (notifications.length > 0) {
+    await Notification.insertMany(notifications);
+  }
+  return notifications.length;
 }

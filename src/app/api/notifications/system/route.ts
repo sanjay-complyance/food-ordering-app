@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
 }
 
 // GET /api/notifications/system - Get system notification stats (admin only)
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await auth();
     if (!session?.user) {

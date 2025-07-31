@@ -15,6 +15,7 @@ vi.mock("@/models/Notification", () => {
   (NotificationMock as any).findOneAndUpdate = vi.fn();
   (NotificationMock as any).findOneAndDelete = vi.fn();
   (NotificationMock as any).save = vi.fn();
+  (NotificationMock as any).insertMany = vi.fn(); // <-- Add this line
   return { default: NotificationMock };
 });
 
@@ -29,6 +30,13 @@ vi.mock("@/models/User", () => {
   (UserMock as any).findOneAndDelete = vi.fn();
   (UserMock as any).save = vi.fn();
   return { default: UserMock };
+});
+
+// Mock Settings
+vi.mock("@/models/Settings", () => {
+  const SettingsMock = vi.fn();
+  (SettingsMock as any).findOne = vi.fn();
+  return { default: SettingsMock };
 });
 
 // Mock notification-preferences functions
@@ -47,11 +55,17 @@ vi.mock("@/lib/auth", () => ({
 import { GET, POST } from "@/app/api/notifications/route";
 import { PUT } from "@/app/api/notifications/[id]/route";
 import { POST as POST_SYSTEM } from "@/app/api/notifications/system/route";
+import { GET as GET_STREAM } from "@/app/api/notifications/stream/route";
 import dbConnect from "@/lib/mongodb";
 import Notification from "@/models/Notification";
 import User from "@/models/User";
 // User is mocked above, no need to import
 import { auth } from "@/lib/auth";
+import {
+  shouldSendMenuUpdateReminders,
+  hasMenuUpdateReminderBeenSentToday,
+  sendMenuUpdateReminderToAdmins,
+} from "@/lib/notifications";
 
 // Add a helper for mock session
 const mockSession = (user: { id: string; email: string; role: string }) => ({ user, expires: new Date(Date.now() + 1000 * 60 * 60).toISOString() });
@@ -441,5 +455,88 @@ describe("Notifications API", () => {
       expect(response.status).toBe(403);
       expect(data.error).toBe("Forbidden");
     });
+  });
+
+  describe("GET /api/notifications/stream (SSE)", () => {
+    it("should return a stream with correct headers and send events", async () => {
+      const request = new NextRequest("http://localhost:3000/api/notifications/stream");
+      const response = await GET_STREAM(request);
+      expect(response.headers.get("Content-Type")).toBe("text/event-stream");
+      expect(response.headers.get("Cache-Control")).toBe("no-cache");
+      expect(response.headers.get("Connection")).toBe("keep-alive");
+      // The body is a ReadableStream, but we can't easily test streaming in unit tests
+      expect(response.body).toBeDefined();
+    });
+  });
+});
+
+describe("Menu Update Reminder", () => {
+  it("should return true at 11:00 AM on a weekday", async () => {
+    const RealDate = Date;
+    // Set to Monday, 11:00 AM local time
+    const testDate = new Date();
+    testDate.setHours(11, 0, 0, 0);
+    testDate.setDate(testDate.getDate() + ((1 + 7 - testDate.getDay()) % 7)); // Next Monday
+    global.Date = class extends RealDate {
+      constructor() {
+        super();
+        return testDate;
+      }
+    } as any;
+    const Settings = (await import("@/models/Settings")).default;
+    vi.mocked(Settings.findOne).mockResolvedValueOnce({ menuUpdateReminderTime: "11:00" });
+    await expect(await shouldSendMenuUpdateReminders()).toBe(true);
+    global.Date = RealDate;
+  });
+
+  it("should return false at other times", async () => {
+    const RealDate = Date;
+    const testDate = new Date();
+    testDate.setHours(10, 59, 0, 0);
+    testDate.setDate(testDate.getDate() + ((1 + 7 - testDate.getDay()) % 7)); // Next Monday
+    global.Date = class extends RealDate {
+      constructor() {
+        super();
+        return testDate;
+      }
+    } as any;
+    const Settings = (await import("@/models/Settings")).default;
+    vi.mocked(Settings.findOne).mockResolvedValueOnce({ menuUpdateReminderTime: "11:00" });
+    await expect(await shouldSendMenuUpdateReminders()).toBe(false);
+    global.Date = RealDate;
+  });
+
+  it("should check if menu update reminder has already been sent today", async () => {
+    vi.mocked(Notification.findOne).mockResolvedValueOnce({});
+    const result = await hasMenuUpdateReminderBeenSentToday();
+    expect(result).toBe(true);
+    vi.mocked(Notification.findOne).mockResolvedValueOnce(null);
+    const result2 = await hasMenuUpdateReminderBeenSentToday();
+    expect(result2).toBe(false);
+  });
+
+  it("should send menu update reminders to all admins", async () => {
+    const mockAdmins = [
+      { _id: "admin1" },
+      { _id: "admin2" },
+    ];
+    vi.mocked(User.find).mockResolvedValueOnce(mockAdmins as any);
+    const insertManySpy = vi.spyOn(Notification, "insertMany").mockResolvedValueOnce([]);
+    const count = await sendMenuUpdateReminderToAdmins();
+    expect(count).toBe(2);
+    expect(insertManySpy).toHaveBeenCalledWith([
+      {
+        userId: "admin1",
+        type: "menu_updated",
+        message: "Please update today’s lunch menu before 11:30 AM.",
+        read: false,
+      },
+      {
+        userId: "admin2",
+        type: "menu_updated",
+        message: "Please update today’s lunch menu before 11:30 AM.",
+        read: false,
+      },
+    ]);
   });
 });

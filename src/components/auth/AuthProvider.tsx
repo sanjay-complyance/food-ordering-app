@@ -8,7 +8,7 @@ import {
   ReactNode,
 } from "react";
 import { useSession } from "next-auth/react";
-import { IUser, UserRole } from "@/types/models";
+import { UserRole } from "@/types/models";
 import { Types } from "mongoose";
 
 // Create a simplified user type for the auth context
@@ -74,7 +74,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           ),
           email: session.user.email || "",
           name: session.user.name || "",
-          role: (session.user as any).role || "user",
+          role: (session.user as unknown as { role?: UserRole }).role || "user",
           createdAt: new Date(),
           updatedAt: new Date(),
         };

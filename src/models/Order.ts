@@ -36,8 +36,18 @@ const OrderSchema = new Schema<IOrder>(
         validator: function (value: Date) {
           // Ensure order date is not in the past (allow today)
           const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          return value >= today;
+          const todayStart = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
+          
+          // Normalize the input value to start of day in UTC
+          const orderDate = new Date(value);
+          const orderDateStart = new Date(Date.UTC(orderDate.getFullYear(), orderDate.getMonth(), orderDate.getDate(), 0, 0, 0, 0));
+          
+          console.log("Order validation - Input value:", value);
+          console.log("Order validation - OrderDate start (UTC):", orderDateStart);
+          console.log("Order validation - Today start (UTC):", todayStart);
+          console.log("Order validation - Is valid:", orderDateStart >= todayStart);
+          
+          return orderDateStart >= todayStart;
         },
         message: "Order date cannot be in the past",
       },
@@ -46,7 +56,7 @@ const OrderSchema = new Schema<IOrder>(
       type: [OrderItemSchema],
       required: [true, "At least one item is required"],
       validate: {
-        validator: function (items: any[]) {
+        validator: function (items: { name: string; description: string; quantity: number }[]) {
           return items && items.length > 0;
         },
         message: "At least one item is required",
@@ -64,7 +74,9 @@ const OrderSchema = new Schema<IOrder>(
 );
 
 // Indexes
-OrderSchema.index({ userId: 1, orderDate: 1 }, { unique: true }); // One order per user per day
+// Regular indexes for efficient queries (uniqueness handled in application logic)
+OrderSchema.index({ userId: 1, orderDate: 1, status: 1 });
+OrderSchema.index({ userId: 1, orderDate: 1 });
 OrderSchema.index({ orderDate: 1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ createdAt: -1 });

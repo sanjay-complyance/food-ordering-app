@@ -5,6 +5,8 @@ import { usePWA } from "@/hooks/usePWA";
 import { Button } from "@/components/ui/button";
 import { Bell, BellOff, Check, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { subscribeUserToPush } from '@/lib/pwa';
+import { useToast } from '@/lib/toast';
 
 interface NotificationPermissionProps {
   onPermissionChange?: (permission: NotificationPermission) => void;
@@ -19,12 +21,35 @@ export function NotificationPermission({
 }: NotificationPermissionProps) {
   const { notificationPermission, requestNotificationPermission } = usePWA();
   const [isRequesting, setIsRequesting] = useState(false);
+  const { toast } = useToast();
 
   const handleRequestPermission = async () => {
     setIsRequesting(true);
     try {
       const result = await requestNotificationPermission();
       onPermissionChange?.(result.permission);
+    } finally {
+      setIsRequesting(false);
+    }
+  };
+
+  const handleEnablePush = async () => {
+    setIsRequesting(true);
+    try {
+      const subscription = await subscribeUserToPush();
+      const res = await fetch('/api/pwa/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription }),
+      });
+      if (res.ok) {
+        toast({ title: 'Push notifications enabled!', variant: 'success' });
+      } else {
+        toast({ title: 'Failed to enable push notifications.', variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error('Push notification setup failed:', error);
+      toast({ title: 'Push notification setup failed.', variant: 'destructive' });
     } finally {
       setIsRequesting(false);
     }
@@ -96,12 +121,25 @@ export function NotificationPermission({
         </Alert>
       )}
 
+      {/* Add push notification enable button if permission is granted but not yet subscribed */}
+      {notificationPermission.permission === "granted" && (
+        <Button
+          onClick={handleEnablePush}
+          disabled={isRequesting}
+          size="sm"
+          variant="default"
+          className="mt-2"
+        >
+          {isRequesting ? "Enabling..." : "Enable Push Notifications"}
+        </Button>
+      )}
+
       {notificationPermission.permission === "denied" && (
         <div className="mt-2 text-sm text-gray-600">
           <p>To enable notifications:</p>
           <ol className="list-decimal list-inside mt-1 space-y-1">
-            <li>Click the lock icon in your browser's address bar</li>
-            <li>Change notifications from "Block" to "Allow"</li>
+            <li>Click the lock icon in your browser&apos;s address bar</li>
+            <li>Change notifications from &quot;Block&quot; to &quot;Allow&quot;</li>
             <li>Refresh the page</li>
           </ol>
         </div>

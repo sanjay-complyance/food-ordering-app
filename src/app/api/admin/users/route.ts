@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getServerSession, authOptions } from '@/lib/auth';
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
@@ -7,7 +7,7 @@ import User from "@/models/User";
 export const dynamic = 'force-dynamic';
 
 // GET /api/admin/users - Get all users (superuser only)
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
